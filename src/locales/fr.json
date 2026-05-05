@@ -1,0 +1,101 @@
+{
+  "nav": {
+    "home": "Accueil",
+    "collections": "Collections",
+    "men": "Hommes",
+    "women": "Femmes",
+    "accessories": "Accessoires",
+    "lookbook": "Lookbook"
+  },
+  "hero": {
+    "cta": "Acheter Maintenant",
+    "secondaryCta": "Voir le Lookbook",
+    "scroll": "Défiler",
+    "marquee": "LIVRAISON GRATUITE DÈS 15 000 DA  •  NOUVELLE COLLECTION SS26  •  LA PRÉCISION RENCONTRE LE STYLE  •  KURIMA  •  ",
+    "SS26": "Collection SS26",
+    "precision": "La Précision\nRencontre le Style",
+    "explore": "Explorer la Collection",
+    "bold": "Mouvements Audacieux,\nMode Audacieuse",
+    "limited": "Édition Limitée",
+    "shopNow": "Acheter Maintenant",
+    "own": "Possédez le",
+    "modern": "Look Moderne"
+  },
+  "sections": {
+    "newArrivals": "Nouveautés",
+    "newArrivalsSubtitle": "Découvrez la prochaine génération du streetwear.",
+    "ourCollections": "Nos Collections",
+    "ourCollectionsSubtitle": "Pièces sélectionnées pour l'environnement urbain moderne.",
+    "ourBrands": "Nos Marques",
+    "testimonials": "Apprécié par notre Communauté Mondiale",
+    "testimonialsSubtitle": "Découvrez pourquoi des milliers de personnes choisissent KURAMA pour leur style quotidien."
+  },
+  "product": {
+    "addToCart": "Ajouter au Panier",
+    "size": "Taille",
+    "color": "Couleur",
+    "sizeGuide": "Guide des Tailles",
+    "description": "Description du Produit",
+    "features": "Caractéristiques",
+    "related": "Vous Aimerez Aussi",
+    "viewAll": "Voir Tout",
+    "pieces": "Articles",
+    "shopCollection": "Acheter la Collection",
+    "freeShipping": "Livraison Gratuite",
+    "freeShippingDesc": "Sur les commandes de plus de 15 000 DA",
+    "securePayment": "Paiement Sécurisé",
+    "securePaymentDesc": "Cryptage SSL 256 bits",
+    "easyReturns": "Retours Faciles",
+    "easyReturnsDesc": "Politique de retour de 30 jours",
+    "quality": "Qualité Premium",
+    "qualityDesc": "Matériaux sélectionnés"
+  },
+  "tags": {
+    "bestSeller": "Meilleure Vente",
+    "new": "Nouveau",
+    "trending": "Tendance",
+    "sale": "Solde"
+  },
+  "categories": {
+    "outerwear": "Vêtements d'extérieur",
+    "hoodies": "Sweats à capuche",
+    "bottoms": "Pantalons",
+    "accessories": "Accessoires"
+  },
+  "collectionsData": {
+    "essentialsName": "Les Essentiels",
+    "essentialsDesc": "Pièces de base pour la garde-robe moderne. Conçues pour la performance quotidienne.",
+    "modernistName": "Le Moderniste",
+    "modernistDesc": "Designs minimalistes pour la silhouette contemporaine. Polyvalents et intemporels.",
+    "enduringName": "Série Durable",
+    "enduringDesc": "Pièces haute performance avec un impact durable. Une qualité palpable.",
+    "eliteName": "Collection Élite",
+    "eliteDesc": "Le summum du streetwear de luxe. Fabriqué à partir de matériaux premium."
+  },
+  "store": {
+    "title": "Visitez Notre Boutique",
+    "subtitle": "Découvrez la collection en personne dans notre flagship d'Alger.",
+    "address": "12 Rue Sidi Yahia, Hydra, Alger, Algérie",
+    "phone": "+213 21 00 00 00",
+    "hours": "Heures d'Ouverture",
+    "weekdays": "Sam - Jeu : 10:00 - 20:00",
+    "friday": "Vendredi : 15:00 - 21:00"
+  },
+  "footer": {
+    "tagline": "La stratégie rencontre le style. Streetwear premium pour les audacieux et les calculateurs.",
+    "shop": "Boutique",
+    "company": "Entreprise",
+    "help": "Aide",
+    "about": "À Propos",
+    "careers": "Carrières",
+    "sustainability": "Durabilité",
+    "press": "Presse",
+    "faq": "FAQ",
+    "shipping": "Livraison",
+    "returns": "Retours",
+    "contact": "Contact",
+    "privacyPolicy": "Politique de Confidentialité",
+    "termsOfService": "Conditions d'Utilisation",
+    "copyright": "© 2026 KURAMA. Tous droits réservés."
+  }
+}

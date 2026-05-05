@@ -1,0 +1,101 @@
+{
+  "nav": {
+    "home": "Home",
+    "collections": "Collections",
+    "men": "Men",
+    "women": "Women",
+    "accessories": "Accessories",
+    "lookbook": "Lookbook"
+  },
+  "hero": {
+    "cta": "Shop Now",
+    "secondaryCta": "Watch Lookbook",
+    "scroll": "Scroll",
+    "marquee": "FREE SHIPPING ON ORDERS OVER 15,000 DA  •  NEW SS26 COLLECTION  •  PRECISION MEETS STYLE  •  KURIMA  •  ",
+    "SS26": "SS26 Collection",
+    "precision": "Precision\nMeets Style",
+    "explore": "Explore Collection",
+    "bold": "Bold Moves,\nBold Fashion",
+    "limited": "Limited Edition",
+    "shopNow": "Shop Now",
+    "own": "Own the",
+    "modern": "Modern Look"
+  },
+  "sections": {
+    "newArrivals": "New Arrivals",
+    "newArrivalsSubtitle": "The latest drops from our SS26 collection. Every piece tells a story.",
+    "ourCollections": "Our Collections",
+    "ourCollectionsSubtitle": "Curated sets designed for the modern wardrobe. Four worlds. One vision.",
+    "ourBrands": "Our Brands",
+    "testimonials": "Loved by our Global Community",
+    "testimonialsSubtitle": "Discover why thousands of individuals choose KURAMA for their daily style."
+  },
+  "product": {
+    "addToCart": "Add to Cart",
+    "size": "Size",
+    "color": "Color",
+    "sizeGuide": "Size Guide",
+    "description": "Product Description",
+    "features": "Product Features",
+    "related": "You May Also Like",
+    "viewAll": "View All",
+    "pieces": "Pieces",
+    "shopCollection": "Shop Collection",
+    "freeShipping": "Free Shipping",
+    "freeShippingDesc": "On orders over 15,000 DA",
+    "securePayment": "Secure Payment",
+    "securePaymentDesc": "256-bit SSL encryption",
+    "easyReturns": "Easy Returns",
+    "easyReturnsDesc": "30-day return policy",
+    "quality": "Premium Quality",
+    "qualityDesc": "Curated materials"
+  },
+  "tags": {
+    "bestSeller": "Best Seller",
+    "new": "New",
+    "trending": "Trending",
+    "sale": "Sale"
+  },
+  "categories": {
+    "outerwear": "Outerwear",
+    "hoodies": "Hoodies",
+    "bottoms": "Bottoms",
+    "accessories": "Accessories"
+  },
+  "collectionsData": {
+    "essentialsName": "The Essentials",
+    "essentialsDesc": "Foundation pieces for the modern wardrobe. Built for daily performance.",
+    "modernistName": "The Modernist",
+    "modernistDesc": "Minimalist designs for the contemporary silhouette. Versatile and timeless.",
+    "enduringName": "Enduring Series",
+    "enduringDesc": "High-performance pieces with lasting impact. Quality you can feel.",
+    "eliteName": "Elite Collection",
+    "eliteDesc": "The pinnacle of luxury streetwear. Crafted from premium materials."
+  },
+  "store": {
+    "title": "Visit Our Store",
+    "subtitle": "Experience the collection in person at our Algiers flagship.",
+    "address": "12 Rue Sidi Yahia, Hydra, Algiers, Algeria",
+    "phone": "+213 21 00 00 00",
+    "hours": "Opening Hours",
+    "weekdays": "Sat - Thu: 10:00 - 20:00",
+    "friday": "Friday: 15:00 - 21:00"
+  },
+  "footer": {
+    "tagline": "Strategy meets style. Premium streetwear for the bold and the calculating.",
+    "shop": "Shop",
+    "company": "Company",
+    "help": "Help",
+    "about": "About Us",
+    "careers": "Careers",
+    "sustainability": "Sustainability",
+    "press": "Press",
+    "faq": "FAQ",
+    "shipping": "Shipping",
+    "returns": "Returns",
+    "contact": "Contact",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service",
+    "copyright": "© 2026 KURAMA. All rights reserved."
+  }
+}

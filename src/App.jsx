@@ -1,7 +1,6 @@
-'use client'
-
 import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Link, Routes, Route, useNavigate } from 'react-router-dom'
 import {
   ShoppingBag,
   Menu,
@@ -18,6 +17,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Clock,
   Heart,
   Eye,
   Plus,
@@ -27,32 +27,49 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { MotionCarousel } from '@/components/animate-ui/components/community/motion-carousel'
+import LogoLoop from '@/components/LogoLoop'
+import ProductPage from '@/pages/ProductPage'
+import { ThemeTogglerButton as ThemeToggler } from '@/components/animate-ui/components/buttons/theme-toggler'
+import { useTranslation } from 'react-i18next'
+import { Globe } from 'lucide-react'
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 // ─────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────
 
-const navLinks = [
-  { label: 'New Arrivals', href: '#new' },
-  { label: 'Collections', href: '#collections' },
-  { label: 'Men', href: '#men' },
-  { label: 'Women', href: '#women' },
-  { label: 'Accessories', href: '#accessories' },
+const getNavLinks = (t) => [
+  { label: t('nav.home'), href: '/' },
+  { label: t('nav.collections'), href: '#collections' },
+  { label: t('nav.accessories'), href: '#' },
 ]
 
-const heroSlides = [
+const getHeroSlides = (t) => [
   {
-    image: '/hero-1.png',
-    subtitle: 'SS26 Collection',
-    title: 'Strategy\nMeets Style',
-    cta: 'Explore Collection',
+    image: '/hero-1.jpg',
+    subtitle: t('hero.SS26'),
+    title: t('hero.precision'),
+    cta: t('hero.explore'),
     href: '#collections',
   },
   {
     image: '/hero-2.png',
-    title: 'Bold Moves,\nBold Fashion',
-    subtitle: 'Limited Edition',
-    cta: 'Shop Now',
+    title: t('hero.bold'),
+    subtitle: t('hero.limited'),
+    cta: t('hero.shopNow'),
+    href: '#new',
+  },
+  {
+    image: '/hero-3.jpg',
+    title: t('hero.own'),
+    subtitle: t('hero.modern'),
+    cta: t('hero.shopNow'),
     href: '#new',
   },
 ]
@@ -60,69 +77,120 @@ const heroSlides = [
 const featuredProducts = [
   {
     id: 1,
-    name: 'Midnight Rook Jacket',
-    price: 289,
-    originalPrice: 349,
+    name: 'Midnight Tech Jacket',
+    price: '38,500',
+    originalPrice: '45,000',
     image: '/product-1.png',
-    tag: 'Best Seller',
-    category: 'Outerwear',
+    tag: 'tags.bestSeller',
+    category: 'categories.outerwear',
   },
   {
     id: 2,
-    name: 'Castle Siege Hoodie',
-    price: 159,
+    name: 'Premium Fleece Hoodie',
+    price: '18,900',
     image: '/product-2.png',
-    tag: 'New',
-    category: 'Hoodies',
+    tag: 'tags.new',
+    category: 'categories.hoodies',
   },
   {
     id: 3,
-    name: 'Endgame Slim Pants',
-    price: 129,
+    name: 'Essential Slim Pants',
+    price: '14,500',
     image: '/product-3.png',
-    tag: 'Trending',
-    category: 'Bottoms',
+    tag: 'tags.trending',
+    category: 'categories.bottoms',
   },
   {
     id: 4,
-    name: 'Grand Master Accessories',
-    price: 89,
-    originalPrice: 119,
+    name: 'Signature Accessories',
+    price: '9,500',
+    originalPrice: '12,000',
     image: '/product-4.png',
-    tag: 'Sale',
-    category: 'Accessories',
+    tag: 'tags.sale',
+    category: 'categories.accessories',
   },
 ]
 
 const collections = [
   {
-    name: 'The Opening',
-    description: 'Where every move counts. Foundation pieces for the strategic wardrobe.',
+    name: 'collectionsData.essentialsName',
+    description: 'collectionsData.essentialsDesc',
     image: '/hero-1.png',
     items: 24,
   },
   {
-    name: 'Endgame',
-    description: 'Final touches that define victory. Statement pieces with lasting impact.',
+    name: 'collectionsData.modernistName',
+    description: 'collectionsData.modernistDesc',
+    image: '/hero-3.jpg',
+    items: 32,
+  },
+  {
+    name: 'collectionsData.enduringName',
+    description: 'collectionsData.enduringDesc',
     image: '/hero-2.png',
     items: 18,
   },
+  {
+    name: 'collectionsData.eliteName',
+    description: 'collectionsData.eliteDesc',
+    image: '/product-1.png',
+    items: 12,
+  },
 ]
 
-const marqueeText = 'FREE SHIPPING ON ORDERS OVER $150  •  NEW SS26 COLLECTION  •  STRATEGY MEETS STYLE  •  KURIMA  •  '
+const brands = [
+  'LUXE', 'URBAN', 'CORE', 'PRIME', 'ELITE', 'NEXUS', 'VANTAGE', 'SIGNATURE', 'ZENITH', 'APEX'
+]
+
+// const marqueeText = 'FREE SHIPPING ON ORDERS OVER 15,000 DA  •  NEW SS26 COLLECTION  •  PRECISION MEETS STYLE  •  KURIMA  •  '
 
 const features = [
-  { icon: Truck, title: 'Free Shipping', desc: 'On orders over $150' },
-  { icon: Shield, title: 'Secure Payment', desc: '256-bit SSL encryption' },
-  { icon: RotateCcw, title: 'Easy Returns', desc: '30-day return policy' },
-  { icon: Star, title: 'Premium Quality', desc: 'Curated materials' },
+  { icon: Truck, title: 'product.freeShipping', desc: 'product.freeShippingDesc' },
+  { icon: Shield, title: 'product.securePayment', desc: 'product.securePaymentDesc' },
+  { icon: RotateCcw, title: 'product.easyReturns', desc: 'product.easyReturnsDesc' },
+  { icon: Star, title: 'product.quality', desc: 'product.qualityDesc' },
 ]
+
+function LanguageSwitcher() {
+  const { i18n } = useTranslation()
+
+  const languages = [
+    { code: 'en', name: 'English', flag: '🇺🇸' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
+    { code: 'ar', name: 'العربية', flag: '🇩🇿' },
+  ]
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="p-2 text-foreground/70 hover:text-kurima-orange transition-colors cursor-pointer">
+          <Globe className="w-5 h-5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="bg-background border-border z-[100]">
+        {languages.map((lang) => (
+          <DropdownMenuItem
+            key={lang.code}
+            onClick={() => i18n.changeLanguage(lang.code)}
+            className={`flex items-center gap-2 cursor-pointer ${
+              i18n.language === lang.code ? 'text-kurima-orange font-bold' : 'text-foreground'
+            }`}
+          >
+            <span>{lang.flag}</span>
+            <span>{lang.name}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 // ─────────────────────────────────────────────
 // COMPONENTS
 // ─────────────────────────────────────────────
 
 function Navbar() {
+  const { t } = useTranslation()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
 
@@ -140,28 +208,28 @@ function Navbar() {
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
           scrolled
-            ? 'bg-black/90 backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-black/50'
+            ? 'bg-background/90 backdrop-blur-xl border-b border-border shadow-2xl shadow-black/50'
             : 'bg-transparent'
         }`}
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
             {/* Logo */}
-            <a href="#" className="flex items-center gap-3 group">
+            <Link to="/" className="flex items-center gap-3 group">
                 <img
                   src="/kurima-logo.png"
                   alt="KURAMA"
                   className="w-32 object-contain p-1"
                 />
-            </a>
+            </Link>
 
             {/* Desktop Links */}
             <div className="hidden lg:flex items-center gap-8">
-              {navLinks.map((link) => (
+              {getNavLinks(t).map((link) => (
                 <a
                   key={link.label}
                   href={link.href}
-                  className="text-sm font-medium text-white/70 hover:text-kurima-orange transition-colors duration-300 tracking-wide uppercase"
+                  className="text-sm font-medium text-foreground/70 hover:text-kurima-orange transition-colors duration-300 tracking-wide uppercase"
                 >
                   {link.label}
                 </a>
@@ -170,7 +238,9 @@ function Navbar() {
 
             {/* Actions */}
             <div className="flex items-center gap-3">
-              <button className="relative p-2 text-white/70 hover:text-kurima-orange transition-colors">
+              <LanguageSwitcher />
+              <ThemeToggler />
+              <button className="relative p-2 text-foreground/70 hover:text-kurima-orange transition-colors">
                 <ShoppingBag className="w-5 h-5" />
                 <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-kurima-orange text-white text-[10px] font-bold rounded-full flex items-center justify-center">
                   3
@@ -178,7 +248,7 @@ function Navbar() {
               </button>
               <button
                 onClick={() => setMobileOpen(true)}
-                className="lg:hidden p-2 text-white/70 hover:text-kurima-orange transition-colors"
+                className="lg:hidden p-2 text-foreground/70 hover:text-kurima-orange transition-colors"
               >
                 <Menu className="w-5 h-5" />
               </button>
@@ -199,15 +269,15 @@ function Navbar() {
           >
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between px-6 h-20">
-                <span className="text-2xl font-black tracking-[0.2em] text-white">
+                <span className="text-2xl font-black tracking-[0.2em] text-foreground">
                   KUR<span className="text-kurima-orange">I</span>MA
                 </span>
-                <button onClick={() => setMobileOpen(false)} className="p-2 text-white">
+                <button onClick={() => setMobileOpen(false)} className="p-2 text-foreground">
                   <X className="w-6 h-6" />
                 </button>
               </div>
               <div className="flex-1 flex flex-col justify-center px-8 gap-6">
-                {navLinks.map((link, i) => (
+                {getNavLinks(t).map((link, i) => (
                   <motion.a
                     key={link.label}
                     href={link.href}
@@ -215,7 +285,7 @@ function Navbar() {
                     initial={{ opacity: 0, x: 40 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.08 }}
-                    className="text-3xl font-bold text-white/90 hover:text-kurima-orange transition-colors tracking-wide"
+                    className="text-3xl font-bold text-foreground/90 hover:text-kurima-orange transition-colors tracking-wide"
                   >
                     {link.label}
                   </motion.a>
@@ -235,17 +305,19 @@ function Navbar() {
 }
 
 function HeroSection() {
+  const { t } = useTranslation()
+  const slides = getHeroSlides(t)
   const [current, setCurrent] = useState(0)
 
-  const next = useCallback(() => setCurrent((prev) => (prev + 1) % heroSlides.length), [])
-  const prev = useCallback(() => setCurrent((prev) => (prev - 1 + heroSlides.length) % heroSlides.length), [])
+  const next = useCallback(() => setCurrent((prev) => (prev + 1) % slides.length), [slides.length])
+  const prev = useCallback(() => setCurrent((prev) => (prev - 1 + slides.length) % slides.length), [slides.length])
 
   useEffect(() => {
     const timer = setInterval(next, 6000)
     return () => clearInterval(timer)
   }, [next])
 
-  const slide = heroSlides[current]
+  const slide = slides[current]
 
   return (
     <section className="relative h-screen w-full overflow-hidden">
@@ -265,8 +337,8 @@ function HeroSection() {
             className="w-full h-full object-cover"
           />
           {/* Gradient overlays */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+          <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-background/30" />
         </motion.div>
       </AnimatePresence>
 
@@ -291,7 +363,7 @@ function HeroSection() {
                 <p className="text-kurima-orange font-semibold tracking-[0.3em] text-sm sm:text-base mb-4 uppercase">
                   {slide.subtitle}
                 </p>
-                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white leading-[1.1] mb-8 whitespace-pre-line">
+                <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-foreground leading-[1.1] mb-8 whitespace-pre-line">
                   {slide.title}
                 </h1>
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -305,7 +377,7 @@ function HeroSection() {
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-white/20 text-white hover:bg-white/10 font-semibold px-8 py-6 text-base rounded-full"
+                    className="border-border text-foreground hover:bg-foreground/10 font-semibold px-8 py-6 text-base rounded-full"
                   >
                     Watch Lookbook
                   </Button>
@@ -320,24 +392,24 @@ function HeroSection() {
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4">
         <button
           onClick={prev}
-          className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-white/60 hover:text-kurima-orange hover:border-kurima-orange/50 transition-colors"
+          className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-foreground/60 hover:text-kurima-orange hover:border-kurima-orange/50 transition-colors"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
         <div className="flex gap-2">
-          {heroSlides.map((_, i) => (
+          {slides.map((_, i) => (
             <button
               key={i}
               onClick={() => setCurrent(i)}
               className={`h-1 rounded-full transition-all duration-500 ${
-                i === current ? 'w-8 bg-kurima-orange' : 'w-3 bg-white/30'
+                i === current ? 'w-8 bg-kurima-orange' : 'w-3 bg-foreground/30'
               }`}
             />
           ))}
         </div>
         <button
           onClick={next}
-          className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center text-white/60 hover:text-kurima-orange hover:border-kurima-orange/50 transition-colors"
+          className="w-10 h-10 rounded-full border border-border flex items-center justify-center text-foreground/60 hover:text-kurima-orange hover:border-kurima-orange/50 transition-colors"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -347,9 +419,9 @@ function HeroSection() {
       <motion.div
         animate={{ y: [0, 8, 0] }}
         transition={{ repeat: Infinity, duration: 2 }}
-        className="absolute bottom-8 right-8 hidden sm:flex flex-col items-center gap-2 text-white/40"
+        className="absolute bottom-8 right-8 hidden sm:flex flex-col items-center gap-2 text-foreground/40"
       >
-        <span className="text-[10px] tracking-widest uppercase rotate-90 translate-y-6">Scroll</span>
+        <span className="text-[10px] tracking-widest uppercase rotate-90 translate-y-6">{t('hero.scroll')}</span>
         <div className="w-[1px] h-12 bg-gradient-to-b from-kurima-orange/60 to-transparent" />
       </motion.div>
     </section>
@@ -357,13 +429,14 @@ function HeroSection() {
 }
 
 function MarqueeBanner() {
+  const { t } = useTranslation()
   return (
     <div className="bg-kurima-orange py-3 overflow-hidden">
       <div className="flex animate-[scroll_20s_linear_infinite]">
         <div className="flex shrink-0 items-center">
           {Array.from({ length: 4 }).map((_, i) => (
-            <span key={i} className="text-white font-bold text-sm tracking-widest whitespace-nowrap">
-              {marqueeText}
+            <span key={i} className="text-white font-bold text-sm tracking-widest whitespace-nowrap uppercase">
+              {t('hero.marquee')}
             </span>
           ))}
         </div>
@@ -379,8 +452,10 @@ function MarqueeBanner() {
 }
 
 function ProductCard({ product, index }) {
+  const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
   const [liked, setLiked] = useState(false)
+  const navigate = useNavigate()
 
   return (
     <motion.div
@@ -388,9 +463,10 @@ function ProductCard({ product, index }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.1, duration: 0.6 }}
-      className="group relative"
+      className="group relative cursor-pointer"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => navigate(`/product/${product.id}`)}
     >
       <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-kurima-gray">
         <img
@@ -407,14 +483,14 @@ function ProductCard({ product, index }) {
         {/* Tag */}
         <Badge
           className={`absolute top-4 left-4 font-semibold text-xs tracking-wide ${
-            product.tag === 'Sale'
+            product.tag === 'tags.sale'
               ? 'bg-red-600 text-white'
-              : product.tag === 'New'
+              : product.tag === 'tags.new'
               ? 'bg-kurima-orange text-white'
               : 'bg-white/10 backdrop-blur-sm text-white border border-white/20'
           }`}
         >
-          {product.tag}
+          {t(product.tag)}
         </Badge>
         {/* Like button */}
         <button
@@ -431,7 +507,7 @@ function ProductCard({ product, index }) {
         >
           <Button className="flex-1 bg-white text-black hover:bg-kurima-orange hover:text-white font-semibold rounded-full py-5 text-sm">
             <ShoppingBag className="w-4 h-4 mr-2" />
-            Add to Cart
+            {t('product.addToCart')}
           </Button>
           <Button
             size="icon"
@@ -444,23 +520,52 @@ function ProductCard({ product, index }) {
       {/* Info */}
       <div className="mt-4 px-1">
         <p className="text-xs text-kurima-muted font-medium tracking-wider uppercase mb-1">
-          {product.category}
+          {t(product.category)}
         </p>
-        <h3 className="font-bold text-white text-base mb-2 group-hover:text-kurima-orange transition-colors">
-          {product.name}
-        </h3>
-        <div className="flex items-center gap-2">
-          <span className="text-kurima-orange font-bold text-lg">${product.price}</span>
-          {product.originalPrice && (
-            <span className="text-white/40 line-through text-sm">${product.originalPrice}</span>
-          )}
-        </div>
+          <h3 className="font-bold text-foreground text-base mb-2 group-hover:text-kurima-orange transition-colors">
+            {product.name}
+          </h3>
+          <div className="flex items-center gap-2">
+            <span className="text-kurima-orange font-bold text-lg">{product.price} DA</span>
+            {product.originalPrice && (
+              <span className="text-foreground/40 line-through text-sm">{product.originalPrice} DA</span>
+            )}
+          </div>
       </div>
     </motion.div>
   )
 }
 
+function BrandsSection() {
+  return (
+    <section className="py-12 bg-kurima-black  overflow-hidden">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
+        <div className="flex items-center gap-4">
+          <div className="h-[1px] flex-1 bg-white/5" />
+          <h2 className="text-xs font-bold tracking-[0.4em] text-kurima-orange uppercase whitespace-nowrap">
+            Our Brands
+          </h2>
+          <div className="h-[1px] flex-1 bg-white/5" />
+        </div>
+      </div>
+      <LogoLoop
+        logos={brands.map(name => ({ node: name }))}
+        speed={40}
+        gap={80}
+        logoHeight={40}
+        fadeOut={true}
+        renderItem={(item) => (
+          <span className="text-2xl md:text-4xl font-black text-foreground/20 hover:text-kurima-orange transition-colors cursor-default tracking-tighter">
+            {item.node}
+          </span>
+        )}
+      />
+    </section>
+  )
+}
+
 function FeaturedProducts() {
+  const { t } = useTranslation()
   return (
     <section id="new" className="py-20 sm:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -473,11 +578,11 @@ function FeaturedProducts() {
               viewport={{ once: true }}
               className="h-[2px] bg-kurima-orange mb-4"
             />
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white">
-              New Arrivals
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-foreground">
+              {t('sections.newArrivals')}
             </h2>
             <p className="text-kurima-muted mt-3 text-base">
-              The latest drops from our SS26 collection. Every piece tells a story.
+              {t('sections.newArrivalsSubtitle')}
             </p>
           </div>
           <Button
@@ -500,6 +605,7 @@ function FeaturedProducts() {
 }
 
 function CollectionsSection() {
+  const { t } = useTranslation()
   return (
     <section id="collections" className="py-20 sm:py-28 bg-kurima-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -510,168 +616,120 @@ function CollectionsSection() {
             viewport={{ once: true }}
             className="h-[2px] bg-kurima-orange mx-auto mb-4"
           />
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white">
-            Our Collections
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-foreground">
+            {t('sections.ourCollections')}
           </h2>
           <p className="text-kurima-muted mt-3 max-w-lg mx-auto">
-            Curated sets designed for those who play the long game. Two worlds. One vision.
+            {t('sections.ourCollectionsSubtitle')}
           </p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {collections.map((col, i) => (
+        <MotionCarousel
+          items={collections}
+          options={{ loop: true, align: 'center' }}
+          renderSlide={(col) => (
             <motion.div
-              key={col.name}
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.15, duration: 0.6 }}
-              className="group relative h-[400px] sm:h-[500px] rounded-3xl overflow-hidden cursor-pointer"
+              className="group relative h-full w-full rounded-3xl overflow-hidden cursor-pointer"
             >
               <img
                 src={col.image}
-                alt={col.name}
+                alt={t(col.name)}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
               <div className="absolute inset-0 bg-kurima-orange/0 group-hover:bg-kurima-orange/10 transition-colors duration-500" />
               <div className="absolute bottom-8 left-8 right-8">
                 <Badge className="bg-kurima-orange text-white font-semibold mb-3">
-                  {col.items} Pieces
+                  {col.items} {t('product.pieces')}
                 </Badge>
-                <h3 className="text-2xl sm:text-3xl font-black text-white mb-2">{col.name}</h3>
-                <p className="text-white/70 text-sm sm:text-base mb-4 max-w-sm">{col.description}</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-foreground mb-2">{t(col.name)}</h3>
+                <p className="text-foreground/70 text-sm sm:text-base mb-4 max-w-sm">{t(col.description)}</p>
                 <div className="flex items-center gap-2 text-kurima-orange font-semibold text-sm group-hover:gap-3 transition-all">
-                  Shop Collection <ArrowRight className="w-4 h-4" />
+                  {t('product.shopCollection')} <ArrowRight className="w-4 h-4" />
                 </div>
               </div>
             </motion.div>
-          ))}
-        </div>
+          )}
+        />
       </div>
     </section>
   )
 }
 
-function StatsSection() {
-  const stats = [
-    { value: '50K+', label: 'Happy Customers' },
-    { value: '200+', label: 'Unique Designs' },
-    { value: '35+', label: 'Countries Shipped' },
-    { value: '4.9', label: 'Average Rating' },
-  ]
 
+function StoreLocator() {
+  const { t } = useTranslation()
   return (
-    <section className="py-16 border-y border-white/5">
+    <section className="py-20 sm:py-28 bg-background relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-          {stats.map((stat, i) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="text-center"
-            >
-              <div className="text-3xl sm:text-4xl font-black text-kurima-orange mb-1">
-                {stat.value}
-              </div>
-              <div className="text-kurima-muted text-sm tracking-wide">{stat.label}</div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function FeaturesSection() {
-  return (
-    <section className="py-20 sm:py-28">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-          {features.map((feat, i) => (
-            <motion.div
-              key={feat.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="flex flex-col items-center text-center p-6 sm:p-8 rounded-2xl bg-white/[0.02] border border-white/5 hover:border-kurima-orange/30 transition-colors group"
-            >
-              <div className="w-14 h-14 rounded-full bg-kurima-orange/10 flex items-center justify-center mb-4 group-hover:bg-kurima-orange/20 transition-colors">
-                <feat.icon className="w-6 h-6 text-kurima-orange" />
-              </div>
-              <h3 className="font-bold text-white mb-1">{feat.title}</h3>
-              <p className="text-kurima-muted text-sm">{feat.desc}</p>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function NewsletterSection() {
-  const [email, setEmail] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (email) {
-      setSubmitted(true)
-      setEmail('')
-    }
-  }
-
-  return (
-    <section className="py-20 sm:py-28 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute inset-0 bg-gradient-to-r from-kurima-orange/5 via-transparent to-kurima-orange/5" />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-kurima-orange/5 rounded-full blur-3xl" />
-
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="max-w-2xl mx-auto text-center">
+        <div className="grid lg:grid-cols-2 gap-12 items-center">
+          {/* Info Side */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, x: -40 }}
+            whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
           >
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white mb-4">
-              Join the <span className="text-kurima-orange">Movement</span>
+            <div className="h-[2px] w-10 bg-kurima-orange mb-6" />
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-foreground mb-6 uppercase tracking-tighter">
+              {t('store.title')}
             </h2>
-            <p className="text-kurima-muted mb-8 text-base sm:text-lg">
-              Get early access to new drops, exclusive offers, and style inspiration delivered straight to your inbox.
+            <p className="text-kurima-muted text-lg mb-10 max-w-md">
+              {t('store.subtitle')}
             </p>
-            {submitted ? (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-kurima-orange/10 border border-kurima-orange/30 rounded-2xl p-6"
-              >
-                <p className="text-kurima-orange font-semibold text-lg">Welcome to KURIMA!</p>
-                <p className="text-white/60 text-sm mt-1">Check your inbox for a special welcome gift.</p>
-              </motion.div>
-            ) : (
-              <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-                <Input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="flex-1 bg-white/5 border-white/10 text-white placeholder:text-white/30 rounded-full px-6 py-6 text-base focus:border-kurima-orange focus:ring-kurima-orange/20"
-                  required
-                />
-                <Button
-                  type="submit"
-                  className="bg-kurima-orange hover:bg-kurima-orange-light text-white font-bold rounded-full px-8 py-6 text-base"
-                >
-                  Subscribe <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </form>
-            )}
-            <p className="text-white/30 text-xs mt-4">No spam. Unsubscribe anytime.</p>
+
+            <div className="space-y-8">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-kurima-orange/10 flex items-center justify-center shrink-0">
+                  <MapPin className="w-6 h-6 text-kurima-orange" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-foreground mb-1">{t('footer.company')}</h4>
+                  <p className="text-kurima-muted">{t('store.address')}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-kurima-orange/10 flex items-center justify-center shrink-0">
+                  <Phone className="w-6 h-6 text-kurima-orange" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-foreground mb-1">{t('footer.contact')}</h4>
+                  <p className="text-kurima-muted">{t('store.phone')}</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-kurima-orange/10 flex items-center justify-center shrink-0">
+                  <Clock className="w-6 h-6 text-kurima-orange" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-foreground mb-1">{t('store.hours')}</h4>
+                  <p className="text-kurima-muted">{t('store.weekdays')}</p>
+                  <p className="text-kurima-muted">{t('store.friday')}</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Map Side */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8 }}
+            className="relative h-[400px] lg:h-[600px] rounded-3xl overflow-hidden border border-border shadow-2xl"
+          >
+            <iframe 
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3198.0583161726!2d3.0333!3d36.75!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzbCsDQ1JzAwLjAiTiAzwrAwMicwMC4wIkU!5e0!3m2!1sen!2sdz!4v1620250000000!5m2!1sen!2sdz"
+              width="100%" 
+              height="100%" 
+              style={{ border: 0, filter: 'grayscale(1) contrast(1.2) invert(var(--map-invert))' }} 
+              allowFullScreen="" 
+              loading="lazy"
+              className="[--map-invert:0] dark:[--map-invert:0.9]"
+            ></iframe>
+            <div className="absolute inset-0 pointer-events-none border-[12px] border-background/50 rounded-3xl" />
           </motion.div>
         </div>
       </div>
@@ -679,9 +737,11 @@ function NewsletterSection() {
   )
 }
 
+
 function Footer() {
+  const { t } = useTranslation()
   return (
-    <footer className="bg-kurima-dark border-t border-white/5">
+    <footer className="bg-kurima-dark border-t border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10">
           {/* Brand */}
@@ -691,14 +751,14 @@ function Footer() {
 
             </div>
             <p className="text-kurima-muted text-sm leading-relaxed mb-4">
-              Strategy meets style. Premium streetwear for the bold and the calculating.
+              {t('footer.tagline')}
             </p>
             <div className="flex gap-3">
               {[Camera, Send].map((Icon, i) => (
                 <a
                   key={i}
                   href="#"
-                  className="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-white/50 hover:text-kurima-orange hover:border-kurima-orange/30 transition-colors"
+                  className="w-9 h-9 rounded-full bg-foreground/5 border border-border flex items-center justify-center text-foreground/50 hover:text-kurima-orange hover:border-kurima-orange/30 transition-colors"
                 >
                   <Icon className="w-4 h-4" />
                 </a>
@@ -708,12 +768,18 @@ function Footer() {
 
           {/* Shop */}
           <div>
-            <h4 className="font-bold text-white mb-4 tracking-wide text-sm uppercase">Shop</h4>
+            <h4 className="font-bold text-foreground mb-4 tracking-wide text-sm uppercase">{t('footer.shop')}</h4>
             <ul className="space-y-3">
-              {['New Arrivals', 'Men', 'Women', 'Accessories', 'Sale'].map((item) => (
-                <li key={item}>
+              {[
+                { key: 'sections.newArrivals', label: t('sections.newArrivals') },
+                { key: 'nav.men', label: t('nav.men') },
+                { key: 'nav.women', label: t('nav.women') },
+                { key: 'nav.accessories', label: t('nav.accessories') },
+                { key: 'tags.sale', label: t('tags.sale') }
+              ].map((item) => (
+                <li key={item.key}>
                   <a href="#" className="text-kurima-muted text-sm hover:text-kurima-orange transition-colors">
-                    {item}
+                    {item.label}
                   </a>
                 </li>
               ))}
@@ -722,12 +788,17 @@ function Footer() {
 
           {/* Company */}
           <div>
-            <h4 className="font-bold text-white mb-4 tracking-wide text-sm uppercase">Company</h4>
+            <h4 className="font-bold text-foreground mb-4 tracking-wide text-sm uppercase">{t('footer.company')}</h4>
             <ul className="space-y-3">
-              {['About Us', 'Careers', 'Sustainability', 'Press'].map((item) => (
-                <li key={item}>
+              {[
+                { key: 'about', label: t('footer.about') },
+                { key: 'careers', label: t('footer.careers') },
+                { key: 'sustainability', label: t('footer.sustainability') },
+                { key: 'press', label: t('footer.press') }
+              ].map((item) => (
+                <li key={item.key}>
                   <a href="#" className="text-kurima-muted text-sm hover:text-kurima-orange transition-colors">
-                    {item}
+                    {item.label}
                   </a>
                 </li>
               ))}
@@ -736,12 +807,18 @@ function Footer() {
 
           {/* Help */}
           <div>
-            <h4 className="font-bold text-white mb-4 tracking-wide text-sm uppercase">Help</h4>
+            <h4 className="font-bold text-foreground mb-4 tracking-wide text-sm uppercase">{t('footer.help')}</h4>
             <ul className="space-y-3">
-              {['FAQ', 'Shipping', 'Returns', 'Size Guide', 'Contact'].map((item) => (
-                <li key={item}>
+              {[
+                { key: 'faq', label: t('footer.faq') },
+                { key: 'shipping', label: t('footer.shipping') },
+                { key: 'returns', label: t('footer.returns') },
+                { key: 'sizeGuide', label: t('product.sizeGuide') },
+                { key: 'contact', label: t('footer.contact') }
+              ].map((item) => (
+                <li key={item.key}>
                   <a href="#" className="text-kurima-muted text-sm hover:text-kurima-orange transition-colors">
-                    {item}
+                    {item.label}
                   </a>
                 </li>
               ))}
@@ -752,16 +829,20 @@ function Footer() {
         <Separator className="bg-white/5 my-10" />
 
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-kurima-muted text-xs">
-          <p>2026 KURAMA. All rights reserved.</p>
+          <p className="text-kurima-muted text-xs">
+            {t('footer.copyright')}
+          </p>
           <div className="flex gap-6">
-            <a href="#" className="hover:text-kurima-orange transition-colors">Privacy Policy</a>
-            <a href="#" className="hover:text-kurima-orange transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-kurima-orange transition-colors">{t('footer.privacyPolicy')}</a>
+            <a href="#" className="hover:text-kurima-orange transition-colors">{t('footer.termsOfService')}</a>
           </div>
         </div>
       </div>
     </footer>
   )
 }
+
+import TestimonialsSection from '@/components/TestimonialsSection'
 
 // ─────────────────────────────────────────────
 // MAIN PAGE
@@ -771,15 +852,20 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-kurima-black">
       <Navbar />
-      <main className="flex-1">
-        <HeroSection />
-        <MarqueeBanner />
-        <FeaturedProducts />
-        <CollectionsSection />
-        <StatsSection />
-        <FeaturesSection />
-        <NewsletterSection />
-      </main>
+      <Routes>
+        <Route path="/" element={
+          <main className="flex-1">
+            <HeroSection />
+            <MarqueeBanner />
+            <FeaturedProducts />
+            <BrandsSection />
+            <CollectionsSection />
+            <TestimonialsSection />
+            <StoreLocator />
+          </main>
+        } />
+        <Route path="/product/:id" element={<ProductPage />} />
+      </Routes>
       <Footer />
     </div>
   )
