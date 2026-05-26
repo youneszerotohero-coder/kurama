@@ -5,10 +5,10 @@ import TestimonialsGrid from './TestimonialsGrid';
 import { useTranslation } from 'react-i18next'
 
 const stats = [
-  { to: 10, suffix: 'k+', label: 'Happy Customers' },
-  { to: 50, suffix: 'k+', label: 'Orders Shipped' },
-  { to: 99, suffix: '%', label: 'Satisfaction Rate' },
-  { to: 5, suffix: '+', label: 'Years of Style' },
+  { to: 10, suffix: 'k+', label: 'Satisfied Clients' },
+  { to: 50, suffix: 'k+', label: 'Units Installed' },
+  { to: 99, suffix: '%', label: 'Safety Rating' },
+  { to: 5, suffix: '+', label: 'Years of Service' },
 ];
 
 export default function TestimonialsSection() {

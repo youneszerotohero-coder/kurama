@@ -6,8 +6,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: 'Outfit', sans-serif;
+  --font-mono: 'Rajdhani', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -41,9 +41,9 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  --color-kurima-orange: #E8701A;
-  --color-kurima-orange-light: #F5923E;
-  --color-kurima-orange-dark: #C45A0E;
+  --color-kurima-orange: #97ff00;
+  --color-kurima-orange-light: #00bcff;
+  --color-kurima-orange-dark: #74c700;
   --color-kurima-black: var(--background);
   --color-kurima-dark: var(--card);
   --color-kurima-gray: var(--muted);
@@ -58,8 +58,8 @@
   --card-foreground: #0A0A0A;
   --popover: #FFFFFF;
   --popover-foreground: #0A0A0A;
-  --primary: #E8701A;
-  --primary-foreground: #FFFFFF;
+  --primary: #97ff00;
+  --primary-foreground: #0A0A0A;
   --secondary: #EEEEEE;
   --secondary-foreground: #0A0A0A;
   --muted: #F3F3F3;
@@ -69,7 +69,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: rgba(0,0,0,0.1);
   --input: rgba(0,0,0,0.05);
-  --ring: #E8701A;
+  --ring: #97ff00;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -77,46 +77,46 @@
   --chart-5: oklch(0.769 0.188 70.08);
   --sidebar: #F9F9F9;
   --sidebar-foreground: #0A0A0A;
-  --sidebar-primary: #E8701A;
-  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-primary: #97ff00;
+  --sidebar-primary-foreground: #0A0A0A;
   --sidebar-accent: #EEEEEE;
   --sidebar-accent-foreground: #0A0A0A;
   --sidebar-border: rgba(0,0,0,0.1);
-  --sidebar-ring: #E8701A;
+  --sidebar-ring: #97ff00;
 }
 
 .dark {
-  --background: #0A0A0A;
+  --background: #06090F;
   --foreground: #F5F5F5;
-  --card: #141414;
+  --card: #0D121F;
   --card-foreground: #F5F5F5;
-  --popover: #141414;
+  --popover: #0D121F;
   --popover-foreground: #F5F5F5;
-  --primary: #E8701A;
-  --primary-foreground: #FFFFFF;
-  --secondary: #1A1A1A;
+  --primary: #97ff00;
+  --primary-foreground: #0A0A0A;
+  --secondary: #121826;
   --secondary-foreground: #F5F5F5;
-  --muted: #1A1A1A;
-  --muted-foreground: #888888;
-  --accent: #1A1A1A;
+  --muted: #121826;
+  --muted-foreground: #8F9CAE;
+  --accent: #121826;
   --accent-foreground: #F5F5F5;
   --destructive: oklch(0.577 0.245 27.325);
   --border: rgba(255,255,255,0.08);
   --input: rgba(255,255,255,0.1);
-  --ring: #E8701A;
+  --ring: #97ff00;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: #141414;
+  --sidebar: #0D121F;
   --sidebar-foreground: #F5F5F5;
-  --sidebar-primary: #E8701A;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #1A1A1A;
+  --sidebar-primary: #97ff00;
+  --sidebar-primary-foreground: #0A0A0A;
+  --sidebar-accent: #121826;
   --sidebar-accent-foreground: #F5F5F5;
   --sidebar-border: rgba(255,255,255,0.08);
-  --sidebar-ring: #E8701A;
+  --sidebar-ring: #97ff00;
 }
 
 @layer base {
@@ -140,7 +140,7 @@
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #E8701A;
+  background: #97ff00;
 }
 
 /* Smooth scroll */
@@ -171,10 +171,10 @@ html {
 
 @keyframes pulse-orange {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(232, 112, 26, 0.4);
+    box-shadow: 0 0 0 0 rgba(151, 255, 0, 0.4);
   }
   50% {
-    box-shadow: 0 0 0 10px rgba(232, 112, 26, 0);
+    box-shadow: 0 0 0 10px rgba(151, 255, 0, 0);
   }
 }
 
@@ -183,7 +183,7 @@ html {
 }
 
 .animate-shimmer {
-  background: linear-gradient(90deg, transparent, rgba(232,112,26,0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(151, 255, 0, 0.15), transparent);
   background-size: 200% 100%;
   animation: shimmer 3s infinite;
 }

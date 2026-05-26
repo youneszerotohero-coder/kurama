@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link, Routes, Route, useNavigate } from 'react-router-dom'
+import { Link, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import {
   ShoppingBag,
   Menu,
@@ -22,6 +22,9 @@ import {
   Eye,
   Plus,
   Minus,
+  ChevronDown,
+  Search,
+  User,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -30,6 +33,16 @@ import { Separator } from '@/components/ui/separator'
 import { MotionCarousel } from '@/components/animate-ui/components/community/motion-carousel'
 import LogoLoop from '@/components/LogoLoop'
 import ProductPage from '@/pages/ProductPage'
+import ShopPage from '@/pages/ShopPage'
+import CheckoutPage from '@/pages/CheckoutPage'
+import AuthPage from '@/pages/AuthPage'
+import ProfilePage from '@/pages/ProfilePage'
+import AdminLayout from '@/pages/admin/AdminLayout'
+import AdminDashboard from '@/pages/admin/Dashboard'
+import AdminProducts from '@/pages/admin/Products'
+import AdminOrders from '@/pages/admin/Orders'
+import AdminClients from '@/pages/admin/Clients'
+import AdminSettings from '@/pages/admin/Settings'
 import { ThemeTogglerButton as ThemeToggler } from '@/components/animate-ui/components/buttons/theme-toggler'
 import { useTranslation } from 'react-i18next'
 import { Globe } from 'lucide-react'
@@ -39,36 +52,132 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { CartProvider, useCart } from '@/context/CartContext'
+import Cart from '@/components/Cart'
 
 // ─────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────
 
+const megaCategories = [
+  {
+    id: 'featured',
+    name: 'Featured Solutions',
+    icon: '⭐',
+    items: [
+      { name: 'Smart Breakers', image: '/product-1.png', tag: 'new' },
+      { name: 'Energy Monitors', image: '/product-2.png', tag: 'hot' },
+      { name: 'Copper Cables', image: '/product-3.png', tag: 'new' },
+      { name: 'Double Switches', image: '/product-4.png', tag: 'hot' },
+      { name: 'Solar Inverters', image: '/bg1.jpg', tag: 'new' },
+      { name: 'Lithium Battery', image: '/bg2.jpg', tag: 'hot' },
+    ]
+  },
+  {
+    id: 'distribution',
+    name: 'Power Distribution',
+    icon: '⚡',
+    items: [
+      { name: 'Circuit Breakers', image: '/product-1.png', tag: 'hot' },
+      { name: 'Distribution Boards', image: '/product-2.png' },
+      { name: 'Safety Switches', image: '/product-3.png' },
+      { name: 'Surge Protectors', image: '/product-4.png', tag: 'new' },
+      { name: 'Contactors', image: '/bg1.jpg' },
+      { name: 'Relay Modules', image: '/bg2.jpg' },
+    ]
+  },
+  {
+    id: 'smart',
+    name: 'Smart Grid Automation',
+    icon: '📱',
+    items: [
+      { name: 'Energy Monitors', image: '/product-2.png', tag: 'hot' },
+      { name: 'Smart Meters', image: '/product-1.png', tag: 'new' },
+      { name: 'Wi-Fi Switches', image: '/product-4.png', tag: 'hot' },
+      { name: 'IoT Hubs', image: '/product-3.png' },
+      { name: 'Dimmer Controls', image: '/bg1.jpg' },
+      { name: 'Voice Modules', image: '/bg2.jpg' },
+    ]
+  },
+  {
+    id: 'cabling',
+    name: 'Industrial Cabling',
+    icon: '🔌',
+    items: [
+      { name: 'Copper Wire', image: '/product-3.png', tag: 'hot' },
+      { name: 'Armored Cables', image: '/product-4.png' },
+      { name: 'Coaxial Cables', image: '/product-1.png' },
+      { name: 'Conduits & Pipes', image: '/product-2.png', tag: 'new' },
+      { name: 'Cable Trays', image: '/bg1.jpg' },
+    ]
+  },
+  {
+    id: 'renewable',
+    name: 'Renewable Energy',
+    icon: '☀️',
+    items: [
+      { name: 'Solar Panels', image: '/bg1.jpg', tag: 'hot' },
+      { name: 'Solar Inverters', image: '/product-1.png', tag: 'new' },
+      { name: 'Lithium Battery', image: '/bg2.jpg', tag: 'hot' },
+      { name: 'Charge Control', image: '/product-3.png' },
+      { name: 'Wind Turbines', image: '/product-4.png' },
+    ]
+  }
+]
+
+const megaBrands = [
+  {
+    id: 'grid-automation',
+    name: 'Grid & Automation',
+    icon: '🏢',
+    items: [
+      { name: 'Siemens', logo: '/product-1.png', origin: 'Germany', tag: 'Partner' },
+      { name: 'Schneider', logo: '/product-2.png', origin: 'France', tag: 'Preferred' },
+      { name: 'ABB', logo: '/product-3.png', origin: 'Switzerland', tag: 'Partner' },
+      { name: 'Alstom', logo: '/product-4.png', origin: 'France' },
+    ]
+  },
+  {
+    id: 'electrical-equip',
+    name: 'Infrastructure',
+    icon: '⚡',
+    items: [
+      { name: 'Legrand', logo: '/product-2.png', origin: 'France', tag: 'Partner' },
+      { name: 'Eaton', logo: '/product-1.png', origin: 'USA' },
+      { name: 'General Electric', logo: '/product-3.png', origin: 'USA', tag: 'Legacy' },
+    ]
+  },
+  {
+    id: 'smart-lighting',
+    name: 'Smart & Lighting',
+    icon: '💡',
+    items: [
+      { name: 'Philips', logo: '/product-4.png', origin: 'Netherlands', tag: 'Preferred' },
+      { name: 'Tesla', logo: '/bg1.jpg', origin: 'USA', tag: 'New' },
+      { name: 'Honeywell', logo: '/bg2.jpg', origin: 'USA' },
+    ]
+  }
+]
+
 const getNavLinks = (t) => [
   { label: t('nav.home'), href: '/' },
-  { label: t('nav.collections'), href: '#collections' },
-  { label: t('nav.accessories'), href: '#' },
+  { label: t('nav.brands'), href: '#brands', hasBrandsMegaMenu: true },
+  { label: t('nav.categories'), href: '#categories', hasMegaMenu: true },
+  { label: t('nav.shop'), href: '/shop' },
 ]
 
 const getHeroSlides = (t) => [
   {
-    image: '/hero-1.jpg',
+    image: '/bg1.jpg',
     subtitle: t('hero.SS26'),
     title: t('hero.precision'),
     cta: t('hero.explore'),
     href: '#collections',
   },
   {
-    image: '/hero-2.png',
+    image: '/bg2.jpg',
     title: t('hero.bold'),
     subtitle: t('hero.limited'),
-    cta: t('hero.shopNow'),
-    href: '#new',
-  },
-  {
-    image: '/hero-3.jpg',
-    title: t('hero.own'),
-    subtitle: t('hero.modern'),
     cta: t('hero.shopNow'),
     href: '#new',
   },
@@ -77,35 +186,35 @@ const getHeroSlides = (t) => [
 const featuredProducts = [
   {
     id: 1,
-    name: 'Midnight Tech Jacket',
+    name: 'Smart Circuit Breaker Pro',
     price: '38,500',
     originalPrice: '45,000',
-    image: '/product-1.png',
+    image: '/p1.jpg',
     tag: 'tags.bestSeller',
     category: 'categories.outerwear',
   },
   {
     id: 2,
-    name: 'Premium Fleece Hoodie',
+    name: 'Intelligent Energy Monitor',
     price: '18,900',
-    image: '/product-2.png',
+    image: '/p2.jpg',
     tag: 'tags.new',
     category: 'categories.hoodies',
   },
   {
     id: 3,
-    name: 'Essential Slim Pants',
+    name: 'Heavy Duty Copper Cable',
     price: '14,500',
-    image: '/product-3.png',
+    image: '/p3.jpg',
     tag: 'tags.trending',
     category: 'categories.bottoms',
   },
   {
     id: 4,
-    name: 'Signature Accessories',
+    name: 'Premium Double Wall Switch',
     price: '9,500',
     originalPrice: '12,000',
-    image: '/product-4.png',
+    image: '/p4.jpg',
     tag: 'tags.sale',
     category: 'categories.accessories',
   },
@@ -139,7 +248,7 @@ const collections = [
 ]
 
 const brands = [
-  'LUXE', 'URBAN', 'CORE', 'PRIME', 'ELITE', 'NEXUS', 'VANTAGE', 'SIGNATURE', 'ZENITH', 'APEX'
+  'SIEMENS', 'SCHNEIDER', 'ABB', 'LEGRAND', 'PHILIPS', 'EATON', 'GENERAL ELECTRIC', 'HONEYWELL', 'ALSTOM', 'TESLA'
 ]
 
 // const marqueeText = 'FREE SHIPPING ON ORDERS OVER 15,000 DA  •  NEW SS26 COLLECTION  •  PRECISION MEETS STYLE  •  KURIMA  •  '
@@ -191,8 +300,137 @@ function LanguageSwitcher() {
 
 function Navbar() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { setIsCartOpen, cartCount } = useCart()
+
+  // Search States
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef(null)
+
+  useEffect(() => {
+    if (isSearchOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current.focus()
+      }, 100)
+    }
+  }, [isSearchOpen])
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setIsSearchOpen(false)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  // Categories Mega Menu States
+  const [isMegaOpen, setIsMegaOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState('featured')
+  const megaTimeoutRef = useRef(null)
+  const rightPaneRef = useRef(null)
+  const isScrollingRef = useRef(false)
+
+  // Brands Mega Menu States
+  const [isBrandsMegaOpen, setIsBrandsMegaOpen] = useState(false)
+  const [activeBrandsTab, setActiveBrandsTab] = useState('grid-automation')
+  const brandsTimeoutRef = useRef(null)
+  const rightBrandsPaneRef = useRef(null)
+  const isBrandsScrollingRef = useRef(false)
+
+  // Mobile Accordion States
+  const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false)
+  const [mobileActiveGroup, setMobileActiveGroup] = useState(null)
+  const [mobileBrandsOpen, setMobileBrandsOpen] = useState(false)
+  const [mobileActiveBrandGroup, setMobileActiveBrandGroup] = useState(null)
+
+  // Categories Hover Handlers
+  const handleMouseEnterMega = () => {
+    if (megaTimeoutRef.current) clearTimeout(megaTimeoutRef.current)
+    setIsMegaOpen(true)
+  }
+  const handleMouseLeaveMega = () => {
+    megaTimeoutRef.current = setTimeout(() => {
+      setIsMegaOpen(false)
+    }, 150)
+  }
+  const handleLeftClick = (catId) => {
+    setActiveTab(catId)
+    isScrollingRef.current = true
+    const container = rightPaneRef.current
+    if (container) {
+      const element = container.querySelector(`#sec-${catId}`)
+      if (element) {
+        const containerTop = container.getBoundingClientRect().top
+        const elementTop = element.getBoundingClientRect().top
+        const scrollTarget = container.scrollTop + (elementTop - containerTop) - 16
+        container.scrollTo({ top: scrollTarget, behavior: 'smooth' })
+      }
+    }
+    setTimeout(() => {
+      isScrollingRef.current = false
+    }, 600)
+  }
+  const handleRightScroll = () => {
+    if (isScrollingRef.current) return
+    const container = rightPaneRef.current
+    if (!container) return
+    const sections = container.querySelectorAll('.section-category')
+    const containerTop = container.getBoundingClientRect().top
+    let activeId = activeTab
+    sections.forEach((sec) => {
+      const secTop = sec.getBoundingClientRect().top
+      if (secTop - containerTop <= 80) {
+        activeId = sec.id.replace('sec-', '')
+      }
+    })
+    setActiveTab(activeId)
+  }
+
+  // Brands Hover Handlers
+  const handleMouseEnterBrands = () => {
+    if (brandsTimeoutRef.current) clearTimeout(brandsTimeoutRef.current)
+    setIsBrandsMegaOpen(true)
+  }
+  const handleMouseLeaveBrands = () => {
+    brandsTimeoutRef.current = setTimeout(() => {
+      setIsBrandsMegaOpen(false)
+    }, 150)
+  }
+  const handleBrandsLeftClick = (catId) => {
+    setActiveBrandsTab(catId)
+    isBrandsScrollingRef.current = true
+    const container = rightBrandsPaneRef.current
+    if (container) {
+      const element = container.querySelector(`#brandsec-${catId}`)
+      if (element) {
+        const containerTop = container.getBoundingClientRect().top
+        const elementTop = element.getBoundingClientRect().top
+        const scrollTarget = container.scrollTop + (elementTop - containerTop) - 16
+        container.scrollTo({ top: scrollTarget, behavior: 'smooth' })
+      }
+    }
+    setTimeout(() => {
+      isBrandsScrollingRef.current = false
+    }, 600)
+  }
+  const handleBrandsRightScroll = () => {
+    if (isBrandsScrollingRef.current) return
+    const container = rightBrandsPaneRef.current
+    if (!container) return
+    const sections = container.querySelectorAll('.section-brand')
+    const containerTop = container.getBoundingClientRect().top
+    let activeId = activeBrandsTab
+    sections.forEach((sec) => {
+      const secTop = sec.getBoundingClientRect().top
+      if (secTop - containerTop <= 80) {
+        activeId = sec.id.replace('brandsec-', '')
+      }
+    })
+    setActiveBrandsTab(activeId)
+  }
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50)
@@ -207,7 +445,7 @@ function Navbar() {
         animate={{ y: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
-          scrolled
+          scrolled || isSearchOpen
             ? 'bg-background/90 backdrop-blur-xl border-b border-border shadow-2xl shadow-black/50'
             : 'bg-transparent'
         }`}
@@ -217,34 +455,87 @@ function Navbar() {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-3 group">
                 <img
-                  src="/kurima-logo.png"
-                  alt="KURAMA"
-                  className="w-32 object-contain p-1"
+                  src="/logo.png"
+                  alt="ElectroHub"
+                  className="w-40 object-contain p-1 filter dark:brightness-110"
                 />
             </Link>
 
             {/* Desktop Links */}
-            <div className="hidden lg:flex items-center gap-8">
+            <div className="hidden lg:flex items-center gap-8 h-full">
               {getNavLinks(t).map((link) => (
-                <a
+                <div
                   key={link.label}
-                  href={link.href}
-                  className="text-sm font-medium text-foreground/70 hover:text-kurima-orange transition-colors duration-300 tracking-wide uppercase"
+                  className="h-full flex items-center"
+                  onMouseEnter={() => {
+                    if (link.hasMegaMenu) handleMouseEnterMega()
+                    if (link.hasBrandsMegaMenu) handleMouseEnterBrands()
+                  }}
+                  onMouseLeave={() => {
+                    if (link.hasMegaMenu) handleMouseLeaveMega()
+                    if (link.hasBrandsMegaMenu) handleMouseLeaveBrands()
+                  }}
                 >
-                  {link.label}
-                </a>
+                  {link.href.startsWith('/') ? (
+                    <Link
+                      to={link.href}
+                      className="text-sm font-semibold transition-all duration-300 tracking-wide uppercase flex items-center gap-1.5 py-6 border-b-2 border-transparent text-foreground/70 hover:text-kurima-orange cursor-pointer"
+                    >
+                      {link.label}
+                    </Link>
+                  ) : (
+                    <a
+                      href={link.href}
+                      className={`text-sm font-semibold transition-all duration-300 tracking-wide uppercase flex items-center gap-1.5 py-6 border-b-2 ${
+                        (isMegaOpen && link.hasMegaMenu) || (isBrandsMegaOpen && link.hasBrandsMegaMenu)
+                          ? 'text-kurima-orange border-kurima-orange'
+                          : 'text-foreground/70 hover:text-kurima-orange border-transparent'
+                    }`}
+                    >
+                      {link.label}
+                      {(link.hasMegaMenu || link.hasBrandsMegaMenu) && (
+                        <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${
+                          (isMegaOpen && link.hasMegaMenu) || (isBrandsMegaOpen && link.hasBrandsMegaMenu)
+                            ? 'rotate-180 text-kurima-orange' 
+                            : 'text-foreground/45'
+                        }`} />
+                      )}
+                    </a>
+                  )}
+                </div>
               ))}
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setIsSearchOpen(!isSearchOpen)}
+                className={`p-2 transition-colors cursor-pointer rounded-full hover:bg-foreground/5 ${
+                  isSearchOpen ? 'text-kurima-orange' : 'text-foreground/70 hover:text-kurima-orange'
+                }`}
+                aria-label="Search Catalog"
+              >
+                <Search className="w-5 h-5" />
+              </button>
               <LanguageSwitcher />
               <ThemeToggler />
-              <button className="relative p-2 text-foreground/70 hover:text-kurima-orange transition-colors">
+              <Link 
+                to={localStorage.getItem('currentUser') ? "/profile" : "/login"}
+                className="p-2 text-foreground/70 hover:text-kurima-orange transition-colors cursor-pointer rounded-full hover:bg-foreground/5"
+                aria-label="User Profile"
+              >
+                <User className="w-5 h-5" />
+              </Link>
+              <button 
+                onClick={() => setIsCartOpen(true)}
+                className="relative p-2 text-foreground/70 hover:text-kurima-orange transition-colors cursor-pointer"
+              >
                 <ShoppingBag className="w-5 h-5" />
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-kurima-orange text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  3
-                </span>
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-kurima-orange text-black text-[10px] font-bold rounded-full flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setMobileOpen(true)}
@@ -255,6 +546,268 @@ function Navbar() {
             </div>
           </div>
         </div>
+
+        {/* Search Bar Sub-Header */}
+        <AnimatePresence>
+          {isSearchOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.35, ease: 'easeInOut' }}
+              className="border-t border-border bg-background/95 dark:bg-[#080d1a]/98 backdrop-blur-2xl overflow-hidden"
+            >
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
+                <div className="relative flex items-center gap-4">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-foreground/45" />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder={t('search.placeholder', 'Search smart breakers, heavy duty cables, wiring devices...')}
+                      className="w-full pl-12 pr-10 py-3.5 bg-foreground/[0.02] border border-border/80 rounded-2xl text-sm font-semibold text-foreground placeholder-foreground/30 focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all"
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-foreground/5 text-foreground/45 hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button 
+                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-black px-6 py-3.5 h-auto rounded-2xl text-xs uppercase tracking-widest cursor-pointer shadow-lg shadow-kurima-orange/5"
+                  >
+                    {t('search.btn', 'Search')}
+                  </Button>
+                </div>
+                
+                {/* Trending searches */}
+                <div className="flex items-center gap-3 mt-4 flex-wrap">
+                  <span className="text-[10px] font-black uppercase text-kurima-muted tracking-widest">{t('search.trending', 'Trending Searches:')}</span>
+                  {[
+                    { key: 'breakers', defaultVal: 'Smart Breakers' },
+                    { key: 'monitors', defaultVal: 'Energy Monitors' },
+                    { key: 'cables', defaultVal: 'Copper Cables' },
+                    { key: 'switches', defaultVal: 'Double Switches' }
+                  ].map((item) => {
+                    const term = t(`search.${item.key}`, item.defaultVal)
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={() => setSearchQuery(term)}
+                        className="text-[10px] font-bold text-foreground/75 hover:text-kurima-orange bg-foreground/[0.03] hover:bg-kurima-orange/5 border border-border/40 hover:border-kurima-orange/30 px-3 py-1 rounded-full transition-all cursor-pointer"
+                      >
+                        {term}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Categories Mega Menu Dropdown */}
+        <AnimatePresence>
+          {isMegaOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 15 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              onMouseEnter={handleMouseEnterMega}
+              onMouseLeave={handleMouseLeaveMega}
+              className="absolute left-0 right-0 w-full bg-background/95 dark:bg-background/98 backdrop-blur-3xl border-b border-border shadow-2xl z-40 overflow-hidden"
+            >
+              <div className="max-w-7xl mx-auto flex h-[480px]">
+                {/* Left Pane: Category Groups Sidebar */}
+                <div className="w-1/4 bg-foreground/[0.015] border-r border-border/80 h-full overflow-y-auto scrollbar-none py-8">
+                  <div className="flex flex-col">
+                    {megaCategories.map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => handleLeftClick(cat.id)}
+                        onMouseEnter={() => handleLeftClick(cat.id)}
+                        className={`w-full text-left px-8 py-4 flex items-center justify-between font-semibold transition-all relative ${
+                          activeTab === cat.id
+                            ? 'text-kurima-orange bg-kurima-orange/5'
+                            : 'text-foreground/75 hover:text-foreground hover:bg-foreground/[0.01]'
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="text-sm uppercase tracking-wider">{cat.name}</span>
+                        </span>
+                        {activeTab === cat.id && (
+                          <motion.div
+                            layoutId="activeCategoryBar"
+                            className="absolute left-0 top-0 bottom-0 w-1 bg-kurima-orange"
+                          />
+                        )}
+                        <ChevronRight className={`w-4 h-4 transition-transform ${activeTab === cat.id ? 'translate-x-1 text-kurima-orange' : 'opacity-30'}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right Pane: Subcategories Scroll Area */}
+                <div 
+                  ref={rightPaneRef}
+                  onScroll={handleRightScroll}
+                  className="w-3/4 p-10 h-full overflow-y-auto pr-6 scrollbar-thin scroll-smooth"
+                >
+                  {megaCategories.map((cat) => (
+                    <div 
+                      key={cat.id} 
+                      id={`sec-${cat.id}`} 
+                      className="section-category mb-12 scroll-mt-6"
+                    >
+                      <h3 className="text-sm font-black uppercase tracking-widest text-kurima-orange mb-8 flex items-center gap-2 border-b border-border/40 pb-2">
+                        <span className="text-lg">{cat.icon}</span>
+                        <span>{cat.name}</span>
+                      </h3>
+                      
+                      <div className="grid grid-cols-5 gap-8">
+                        {cat.items.map((item, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setIsMegaOpen(false)
+                              navigate('/product/1')
+                            }}
+                            className="flex flex-col items-center group cursor-pointer"
+                          >
+                            <div className="relative w-24 h-24 rounded-full overflow-hidden bg-foreground/5 border border-border/80 flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-105 group-hover:border-kurima-orange group-hover:shadow-lg group-hover:shadow-kurima-orange/10">
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              />
+                              {item.tag && (
+                                <span
+                                  className={`absolute -top-1 -right-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-md ${
+                                    item.tag === 'hot'
+                                      ? 'bg-red-500 text-white animate-pulse'
+                                      : 'bg-kurima-orange text-black font-extrabold'
+                                  }`}
+                                >
+                                  {item.tag === 'hot' ? '🔥' : '✨'}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-xs font-bold text-foreground/80 group-hover:text-kurima-orange transition-colors uppercase tracking-wider text-center max-w-[120px] line-clamp-2">
+                              {item.name}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Brands Mega Menu Dropdown */}
+        <AnimatePresence>
+          {isBrandsMegaOpen && (
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 15 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              onMouseEnter={handleMouseEnterBrands}
+              onMouseLeave={handleMouseLeaveBrands}
+              className="absolute left-0 right-0 w-full bg-background/95 dark:bg-background/98 backdrop-blur-3xl border-b border-border shadow-2xl z-40 overflow-hidden"
+            >
+              <div className="max-w-7xl mx-auto flex h-[420px]">
+                {/* Left Pane: Brand Sectors Sidebar */}
+                <div className="w-1/4 bg-foreground/[0.015] border-r border-border/80 h-full overflow-y-auto scrollbar-none py-8">
+                  <div className="flex flex-col">
+                    {megaBrands.map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => handleBrandsLeftClick(cat.id)}
+                        onMouseEnter={() => handleBrandsLeftClick(cat.id)}
+                        className={`w-full text-left px-8 py-4 flex items-center justify-between font-semibold transition-all relative ${
+                          activeBrandsTab === cat.id
+                            ? 'text-kurima-orange bg-kurima-orange/5'
+                            : 'text-foreground/75 hover:text-foreground hover:bg-foreground/[0.01]'
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="text-sm uppercase tracking-wider">{cat.name}</span>
+                        </span>
+                        {activeBrandsTab === cat.id && (
+                          <motion.div
+                            layoutId="activeBrandBar"
+                            className="absolute left-0 top-0 bottom-0 w-1 bg-kurima-orange"
+                          />
+                        )}
+                        <ChevronRight className={`w-4 h-4 transition-transform ${activeBrandsTab === cat.id ? 'translate-x-1 text-kurima-orange' : 'opacity-30'}`} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Right Pane: Brands Scroll Area */}
+                <div 
+                  ref={rightBrandsPaneRef}
+                  onScroll={handleBrandsRightScroll}
+                  className="w-3/4 p-10 h-full overflow-y-auto pr-6 scrollbar-thin scroll-smooth"
+                >
+                  {megaBrands.map((cat) => (
+                    <div 
+                      key={cat.id} 
+                      id={`brandsec-${cat.id}`} 
+                      className="section-brand mb-12 scroll-mt-6"
+                    >
+                      <h3 className="text-sm font-black uppercase tracking-widest text-kurima-orange mb-8 flex items-center gap-2 border-b border-border/40 pb-2">
+                        <span className="text-lg">{cat.icon}</span>
+                        <span>{cat.name}</span>
+                      </h3>
+                      
+                      <div className="grid grid-cols-4 gap-8">
+                        {cat.items.map((item, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => {
+                              setIsBrandsMegaOpen(false)
+                              navigate('/product/1')
+                            }}
+                            className="flex flex-col items-center group cursor-pointer"
+                          >
+                            <div className="relative w-24 h-24 rounded-full overflow-hidden bg-foreground/5 border border-border/80 flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-105 group-hover:border-kurima-orange group-hover:shadow-lg group-hover:shadow-kurima-orange/10">
+                              <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
+                                <span className="text-sm font-black text-foreground tracking-wider group-hover:text-kurima-orange transition-colors">
+                                  {item.name}
+                                </span>
+                                <span className="text-[9px] text-foreground/45 font-semibold tracking-tight mt-1">
+                                  {item.origin}
+                                </span>
+                              </div>
+                              {item.tag && (
+                                <span
+                                  className={`absolute -top-1 -right-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md bg-kurima-orange text-black`}
+                                >
+                                  {item.tag}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.nav>
 
       {/* Mobile Menu */}
@@ -265,34 +818,238 @@ function Navbar() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: '100%' }}
             transition={{ duration: 0.3, ease: 'easeInOut' }}
-            className="fixed inset-0 z-[60] bg-black/98 backdrop-blur-2xl"
+            className="fixed inset-0 z-[60] bg-background/98 dark:bg-[#06090F]/98 backdrop-blur-2xl border-l border-border"
           >
             <div className="flex flex-col h-full">
               <div className="flex items-center justify-between px-6 h-20">
-                <span className="text-2xl font-black tracking-[0.2em] text-foreground">
-                  KUR<span className="text-kurima-orange">I</span>MA
-                </span>
+                <img
+                  src="/logo.png"
+                  alt="ElectroHub"
+                  className="w-36 object-contain filter dark:brightness-110"
+                />
                 <button onClick={() => setMobileOpen(false)} className="p-2 text-foreground">
                   <X className="w-6 h-6" />
                 </button>
               </div>
-              <div className="flex-1 flex flex-col justify-center px-8 gap-6">
-                {getNavLinks(t).map((link, i) => (
-                  <motion.a
-                    key={link.label}
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    initial={{ opacity: 0, x: 40 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.08 }}
-                    className="text-3xl font-bold text-foreground/90 hover:text-kurima-orange transition-colors tracking-wide"
-                  >
-                    {link.label}
-                  </motion.a>
-                ))}
+
+              {/* Mobile Nested Accordion Links */}
+              <div className="flex-1 overflow-y-auto py-6 px-8 flex flex-col gap-6 scrollbar-none justify-center">
+                {getNavLinks(t).map((link, i) => {
+                  if (link.hasBrandsMegaMenu) {
+                    return (
+                      <motion.div
+                        key={link.label}
+                        initial={{ opacity: 0, x: 40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.08 }}
+                        className="flex flex-col"
+                      >
+                        <button
+                          onClick={() => setMobileBrandsOpen(!mobileBrandsOpen)}
+                          className="w-full flex items-center justify-between text-3xl font-bold text-foreground/90 hover:text-kurima-orange transition-colors tracking-wide text-left rtl:text-right py-2"
+                        >
+                          <span>{link.label}</span>
+                          <ChevronDown
+                            className={`w-6 h-6 transition-transform duration-300 ${
+                              mobileBrandsOpen ? 'rotate-180 text-kurima-orange' : 'text-foreground/45'
+                            }`}
+                          />
+                        </button>
+
+                        <AnimatePresence>
+                          {mobileBrandsOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden mt-3 pl-4 flex flex-col gap-4 border-l-2 border-foreground/10"
+                            >
+                              {megaBrands.map((group) => (
+                                <div key={group.id} className="flex flex-col">
+                                  <button
+                                    onClick={() =>
+                                      setMobileActiveBrandGroup(mobileActiveBrandGroup === group.id ? null : group.id)
+                                    }
+                                    className={`w-full py-2 flex items-center justify-between text-lg font-semibold text-foreground/80 hover:text-kurima-orange text-left rtl:text-right ${
+                                      mobileActiveBrandGroup === group.id ? 'text-kurima-orange' : ''
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span className="text-xl">{group.icon}</span>
+                                      <span>{group.name}</span>
+                                    </span>
+                                    <ChevronDown
+                                      className={`w-4 h-4 transition-transform duration-300 ${
+                                        mobileActiveBrandGroup === group.id ? 'rotate-180 text-kurima-orange' : 'text-foreground/30'
+                                      }`}
+                                    />
+                                  </button>
+
+                                  <AnimatePresence>
+                                    {mobileActiveBrandGroup === group.id && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="grid grid-cols-2 gap-3 py-3 pl-2"
+                                      >
+                                        {group.items.map((sub, idx) => (
+                                          <div
+                                            key={idx}
+                                            onClick={() => {
+                                              setMobileOpen(false)
+                                              navigate('/product/1')
+                                            }}
+                                            className="flex flex-col items-start gap-1 p-3 rounded-xl bg-foreground/[0.03] active:bg-foreground/[0.07] border border-border/40 cursor-pointer transition-all duration-200"
+                                          >
+                                            <span className="text-xs font-bold text-foreground/90 uppercase tracking-wider">
+                                              {sub.name}
+                                            </span>
+                                            <span className="text-[9px] text-foreground/45 uppercase tracking-wider font-semibold">
+                                              {sub.origin}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    )
+                  }
+
+                  if (link.hasMegaMenu) {
+                    return (
+                      <motion.div
+                        key={link.label}
+                        initial={{ opacity: 0, x: 40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.08 }}
+                        className="flex flex-col"
+                      >
+                        <button
+                          onClick={() => setMobileCategoriesOpen(!mobileCategoriesOpen)}
+                          className="w-full flex items-center justify-between text-3xl font-bold text-foreground/90 hover:text-kurima-orange transition-colors tracking-wide text-left rtl:text-right py-2"
+                        >
+                          <span>{link.label}</span>
+                          <ChevronDown
+                            className={`w-6 h-6 transition-transform duration-300 ${
+                              mobileCategoriesOpen ? 'rotate-180 text-kurima-orange' : 'text-foreground/45'
+                            }`}
+                          />
+                        </button>
+
+                        <AnimatePresence>
+                          {mobileCategoriesOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              transition={{ duration: 0.3 }}
+                              className="overflow-hidden mt-3 pl-4 flex flex-col gap-4 border-l-2 border-foreground/10"
+                            >
+                              {megaCategories.map((group) => (
+                                <div key={group.id} className="flex flex-col">
+                                  <button
+                                    onClick={() =>
+                                      setMobileActiveGroup(mobileActiveGroup === group.id ? null : group.id)
+                                    }
+                                    className={`w-full py-2 flex items-center justify-between text-lg font-semibold text-foreground/80 hover:text-kurima-orange text-left rtl:text-right ${
+                                      mobileActiveGroup === group.id ? 'text-kurima-orange' : ''
+                                    }`}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span className="text-xl">{group.icon}</span>
+                                      <span>{group.name}</span>
+                                    </span>
+                                    <ChevronDown
+                                      className={`w-4 h-4 transition-transform duration-300 ${
+                                        mobileActiveGroup === group.id ? 'rotate-180 text-kurima-orange' : 'text-foreground/30'
+                                      }`}
+                                    />
+                                  </button>
+
+                                  <AnimatePresence>
+                                    {mobileActiveGroup === group.id && (
+                                      <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: 'auto', opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="grid grid-cols-2 gap-3 py-3 pl-2"
+                                      >
+                                        {group.items.map((sub, idx) => (
+                                          <div
+                                            key={idx}
+                                            onClick={() => {
+                                              setMobileOpen(false)
+                                              navigate('/product/1')
+                                            }}
+                                            className="flex items-center gap-2.5 p-2 rounded-xl bg-foreground/[0.03] active:bg-foreground/[0.07] border border-border/40 cursor-pointer transition-all duration-200"
+                                          >
+                                            <div className="w-9 h-9 rounded-full overflow-hidden bg-foreground/10 flex-shrink-0">
+                                              <img src={sub.image} alt="" className="w-full h-full object-cover" />
+                                            </div>
+                                            <span className="text-[11px] font-bold text-foreground/85 truncate uppercase tracking-wider">
+                                              {sub.name}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              ))}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </motion.div>
+                    )
+                  }
+
+                  if (link.href.startsWith('/')) {
+                    return (
+                      <motion.div
+                        key={link.label}
+                        initial={{ opacity: 0, x: 40 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.08 }}
+                      >
+                        <Link
+                          to={link.href}
+                          onClick={() => setMobileOpen(false)}
+                          className="text-3xl font-bold text-foreground/90 hover:text-kurima-orange transition-colors tracking-wide py-2 block text-left rtl:text-right cursor-pointer"
+                        >
+                          {link.label}
+                        </Link>
+                      </motion.div>
+                    )
+                  }
+
+                  return (
+                    <motion.a
+                      key={link.label}
+                      href={link.href}
+                      onClick={() => setMobileOpen(false)}
+                      initial={{ opacity: 0, x: 40 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.08 }}
+                      className="text-3xl font-bold text-foreground/90 hover:text-kurima-orange transition-colors tracking-wide py-2 text-left rtl:text-right"
+                    >
+                      {link.label}
+                    </motion.a>
+                  )
+                })}
               </div>
+
               <div className="px-8 pb-10">
-                <Button className="w-full bg-kurima-orange hover:bg-kurima-orange-light text-white font-semibold py-6 text-base rounded-full">
+                <Button className="w-full bg-kurima-orange hover:bg-kurima-orange-light text-black font-semibold py-6 text-base rounded-full">
                   Shop Now <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </div>
@@ -366,10 +1123,10 @@ function HeroSection() {
                 <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-foreground leading-[1.1] mb-8 whitespace-pre-line">
                   {slide.title}
                 </h1>
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-4" dir="ltr">
                   <Button
                     size="lg"
-                    className="bg-kurima-orange hover:bg-kurima-orange-light text-white font-bold px-8 py-6 text-base rounded-full animate-pulse-orange group"
+                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-bold px-8 py-6 text-base rounded-full animate-pulse-orange group"
                   >
                     {slide.cta}
                     <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -456,6 +1213,7 @@ function ProductCard({ product, index }) {
   const [hovered, setHovered] = useState(false)
   const [liked, setLiked] = useState(false)
   const navigate = useNavigate()
+  const { addToCart } = useCart()
 
   return (
     <motion.div
@@ -463,12 +1221,12 @@ function ProductCard({ product, index }) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: index * 0.1, duration: 0.6 }}
-      className="group relative cursor-pointer"
+      className="group relative cursor-pointer flex flex-col h-full rounded-2xl border border-border/80 bg-background/50 hover:border-kurima-orange/60 hover:shadow-lg hover:shadow-kurima-orange/5 transition-all duration-300 overflow-hidden"
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       onClick={() => navigate(`/product/${product.id}`)}
     >
-      <div className="relative aspect-[3/4] overflow-hidden rounded-2xl bg-kurima-gray">
+      <div className="relative h-[200px] overflow-hidden bg-kurima-gray">
         <img
           src={product.image}
           alt={product.name}
@@ -486,7 +1244,7 @@ function ProductCard({ product, index }) {
             product.tag === 'tags.sale'
               ? 'bg-red-600 text-white'
               : product.tag === 'tags.new'
-              ? 'bg-kurima-orange text-white'
+              ? 'bg-kurima-orange text-black font-extrabold'
               : 'bg-white/10 backdrop-blur-sm text-white border border-white/20'
           }`}
         >
@@ -494,7 +1252,10 @@ function ProductCard({ product, index }) {
         </Badge>
         {/* Like button */}
         <button
-          onClick={() => setLiked(!liked)}
+          onClick={(e) => {
+            e.stopPropagation()
+            setLiked(!liked)
+          }}
           className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-red-500 transition-colors"
         >
           <Heart className={`w-4 h-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
@@ -505,7 +1266,13 @@ function ProductCard({ product, index }) {
             hovered ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
           }`}
         >
-          <Button className="flex-1 bg-white text-black hover:bg-kurima-orange hover:text-white font-semibold rounded-full py-5 text-sm">
+          <Button 
+            onClick={(e) => {
+              e.stopPropagation()
+              addToCart(product, 1)
+            }}
+            className="flex-1 bg-white text-black hover:bg-kurima-orange hover:text-black font-semibold rounded-full py-5 text-sm"
+          >
             <ShoppingBag className="w-4 h-4 mr-2" />
             {t('product.addToCart')}
           </Button>
@@ -518,19 +1285,21 @@ function ProductCard({ product, index }) {
         </div>
       </div>
       {/* Info */}
-      <div className="mt-4 px-1">
-        <p className="text-xs text-kurima-muted font-medium tracking-wider uppercase mb-1">
-          {t(product.category)}
-        </p>
-          <h3 className="font-bold text-foreground text-base mb-2 group-hover:text-kurima-orange transition-colors">
+      <div className="flex-1 flex flex-col justify-between p-5 bg-foreground/[0.015]">
+        <div>
+          <p className="text-xs text-kurima-muted font-medium tracking-wider uppercase mb-1.5">
+            {t(product.category)}
+          </p>
+          <h3 className="font-bold text-foreground text-base mb-2 group-hover:text-kurima-orange transition-colors line-clamp-2">
             {product.name}
           </h3>
-          <div className="flex items-center gap-2">
-            <span className="text-kurima-orange font-bold text-lg">{product.price} DA</span>
-            {product.originalPrice && (
-              <span className="text-foreground/40 line-through text-sm">{product.originalPrice} DA</span>
-            )}
-          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-2">
+          <span className="text-kurima-orange font-black text-lg">{product.price} DA</span>
+          {product.originalPrice && (
+            <span className="text-foreground/45 line-through text-xs font-semibold">{product.originalPrice} DA</span>
+          )}
+        </div>
       </div>
     </motion.div>
   )
@@ -638,8 +1407,8 @@ function CollectionsSection() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
               <div className="absolute inset-0 bg-kurima-orange/0 group-hover:bg-kurima-orange/10 transition-colors duration-500" />
-              <div className="absolute bottom-8 left-8 right-8">
-                <Badge className="bg-kurima-orange text-white font-semibold mb-3">
+              <div className="absolute bottom-8 left-8 right-8 text-left rtl:text-right" dir="auto">
+                <Badge className="bg-kurima-orange text-black font-semibold mb-3">
                   {col.items} {t('product.pieces')}
                 </Badge>
                 <h3 className="text-2xl sm:text-3xl font-black text-foreground mb-2">{t(col.name)}</h3>
@@ -747,7 +1516,7 @@ function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <div className="flex items-center gap-2 mb-4">
-                <img src="/kurima-logo.png" alt="KURIMA" className="w-32 object-contain p-1" />
+                <img src="/logo.png" alt="ElectroHub" className="w-40 object-contain p-1 filter dark:brightness-110" />
 
             </div>
             <p className="text-kurima-muted text-sm leading-relaxed mb-4">
@@ -849,24 +1618,43 @@ import TestimonialsSection from '@/components/TestimonialsSection'
 // ─────────────────────────────────────────────
 
 export default function App() {
+  const location = useLocation()
+  const hideNavbarAndFooter = location.pathname === '/login' || location.pathname.startsWith('/admin')
+
   return (
-    <div className="min-h-screen flex flex-col bg-kurima-black">
-      <Navbar />
-      <Routes>
-        <Route path="/" element={
-          <main className="flex-1">
-            <HeroSection />
-            <MarqueeBanner />
-            <FeaturedProducts />
-            <BrandsSection />
-            <CollectionsSection />
-            <TestimonialsSection />
-            <StoreLocator />
-          </main>
-        } />
-        <Route path="/product/:id" element={<ProductPage />} />
-      </Routes>
-      <Footer />
-    </div>
+    <CartProvider>
+      <div className="min-h-screen flex flex-col bg-kurima-black">
+        {!hideNavbarAndFooter && <Navbar />}
+        <Routes>
+          <Route path="/" element={
+            <main className="flex-1">
+              <HeroSection />
+              <FeaturedProducts />
+              <BrandsSection />
+              <CollectionsSection />
+              <TestimonialsSection />
+              <StoreLocator />
+            </main>
+          } />
+          <Route path="/product/:id" element={<ProductPage />} />
+          <Route path="/shop" element={<ShopPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          
+          {/* Modularized Admin Control Panel Nested Routes */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Navigate to="/admin/dashboard" replace />} />
+            <Route path="dashboard" element={<AdminDashboard />} />
+            <Route path="products" element={<AdminProducts />} />
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="clients" element={<AdminClients />} />
+            <Route path="settings" element={<AdminSettings />} />
+          </Route>
+        </Routes>
+        {!hideNavbarAndFooter && <Footer />}
+        <Cart />
+      </div>
+    </CartProvider>
   )
 }

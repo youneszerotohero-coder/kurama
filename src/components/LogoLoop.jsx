@@ -369,6 +369,7 @@ export const LogoLoop = memo(({
       style={containerStyle}
       role="region"
       aria-label={ariaLabel}
+      dir="ltr"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}>
       {fadeOut && (

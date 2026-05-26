@@ -75,6 +75,7 @@ function MotionCarousel(props) {
 
   return (
     <div
+      dir="ltr"
       className="w-full space-y-8 [--slide-height:320px] sm:[--slide-height:420px] [--slide-spacing:1.5rem] [--slide-size:75%] md:[--slide-size:35%]">
       <div className="overflow-hidden" ref={emblaRef}>
         <div className="flex touch-pan-y touch-pinch-zoom ml-[calc(var(--slide-spacing)*-1)]">
@@ -109,7 +110,7 @@ function MotionCarousel(props) {
           {scrollSnaps.map((_, index) => (
             <DotButton
               key={index}
-              label={`Slide ${index + 1}`}
+              label={`${index + 1}`}
               selected={index === selectedIndex}
               onClick={() => onDotClick(index)} />
           ))}
@@ -136,7 +137,7 @@ function DotButton({
       initial={false}
       className="flex cursor-pointer select-none items-center justify-center rounded-full border-none bg-primary text-primary-foreground text-sm"
       animate={{
-        width: selected ? 68 : 12,
+        width: selected ? 28 : 12,
         height: selected ? 28 : 12,
       }}
       transition={transition}>
