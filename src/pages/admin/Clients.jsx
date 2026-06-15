@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { createPortal } from 'react-dom'
 import {
   Users,
   Plus,
@@ -15,6 +16,7 @@ import {
   ShieldAlert
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import api from '@/lib/api'
 
 export default function Clients() {
   const [clients, setClients] = useState([])
@@ -37,36 +39,40 @@ export default function Clients() {
 
   const [formErrors, setFormErrors] = useState({})
 
-  // Load from LocalStorage
   useEffect(() => {
-    const stored = localStorage.getItem('admin_clients')
-    if (stored) {
+    const loadClients = async () => {
       try {
-        setClients(JSON.parse(stored))
+        const data = await api.adminGetClients()
+        setClients(data)
       } catch (e) {
-        console.error(e)
+        console.error('Failed to load clients from backend:', e)
       }
     }
+
+    loadClients()
   }, [])
 
   // Deletion logic
-  const handleDeleteClient = (id) => {
+  const handleDeleteClient = async (id) => {
     if (!window.confirm('Are you sure you want to delete this client?')) return
-    const filtered = clients.filter(c => c.id !== id)
-    setClients(filtered)
-    localStorage.setItem('admin_clients', JSON.stringify(filtered))
+
+    try {
+      await api.adminDeleteClient(id)
+      setClients(prev => prev.filter(c => c.id !== id))
+    } catch (e) {
+      alert(e.message || 'Failed to delete client.')
+    }
   }
 
   // Toggle approval switch in the row
-  const handleToggleApproval = (id) => {
-    const updated = clients.map(c => {
-      if (c.id === id) {
-        return { ...c, approved: !c.approved }
-      }
-      return c
-    })
-    setClients(updated)
-    localStorage.setItem('admin_clients', JSON.stringify(updated))
+  const handleToggleApproval = async (id) => {
+    try {
+      const client = clients.find(c => c.id === id)
+      const updatedClient = await api.adminToggleClientApproval(id, !client?.approved)
+      setClients(prev => prev.map(c => (c.id === id ? updatedClient : c)))
+    } catch (e) {
+      alert(e.message || 'Failed to update approval state.')
+    }
   }
 
   const openAddModal = () => {
@@ -131,46 +137,28 @@ export default function Clients() {
   }
 
   // Submit Save
-  const handleSaveClient = (e) => {
+  const handleSaveClient = async (e) => {
     e.preventDefault()
     if (!validateForm()) return
 
-    let updated = []
-    if (modalMode === 'add') {
-      const newClient = {
-        id: clients.length > 0 ? Math.max(...clients.map(c => c.id)) + 1 : 1,
-        fullName: clientForm.fullName,
-        email: clientForm.email,
-        phone: clientForm.phone,
-        company: clientForm.company,
-        wilaya: clientForm.wilaya,
-        commune: clientForm.commune,
-        approved: clientForm.approved
-      }
-      updated = [...clients, newClient]
-    } else {
-      updated = clients.map(c => {
-        if (c.id === editId) {
-          return {
-            ...c,
-            fullName: clientForm.fullName,
-            email: clientForm.email,
-            phone: clientForm.phone,
-            company: clientForm.company,
-            wilaya: clientForm.wilaya,
-            commune: clientForm.commune,
-            approved: clientForm.approved
-          }
+    try {
+      if (modalMode === 'add') {
+        const created = await api.adminCreateClient(clientForm)
+        setClients(prev => [created, ...prev])
+        if (created.temporaryPassword) {
+          alert(`Client created. Temporary password: ${created.temporaryPassword}`)
         }
-        return c
-      })
-    }
+      } else {
+        const updated = await api.adminUpdateClient(editId, clientForm)
+        setClients(prev => prev.map(c => (c.id === editId ? updated : c)))
+      }
 
-    setClients(updated)
-    localStorage.setItem('admin_clients', JSON.stringify(updated))
-    setModalOpen(false)
-    setEditId(null)
-    setFormErrors({})
+      setModalOpen(false)
+      setEditId(null)
+      setFormErrors({})
+    } catch (e) {
+      setFormErrors({ submit: e.message || 'Failed to save client.' })
+    }
   }
 
   return (
@@ -300,177 +288,186 @@ export default function Clients() {
       {/* ─────────────────────────────────────────────
           CLIENT ADD / EDIT DIALOG FORM MODAL
           ───────────────────────────────────────────── */}
-      <AnimatePresence>
-        {modalOpen && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
-            {/* Overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setModalOpen(false)}
-              className="absolute inset-0 bg-black/85 backdrop-blur-sm"
-            />
-
-            {/* Modal */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              transition={{ duration: 0.25 }}
-              className="relative w-full max-w-lg bg-card border border-border rounded-3xl p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[85vh] text-left"
-            >
-              {/* Dismiss button */}
-              <button
+      {createPortal(
+        <AnimatePresence>
+          {modalOpen && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 sm:p-6">
+              {/* Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
                 onClick={() => setModalOpen(false)}
-                className="absolute right-6 top-6 p-2 bg-foreground/5 hover:bg-foreground/10 rounded-full text-foreground/60 hover:text-foreground transition-colors cursor-pointer"
+                className="absolute inset-0 bg-black/85 backdrop-blur-sm"
+              />
+ 
+              {/* Modal */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                transition={{ duration: 0.25 }}
+                className="relative w-full max-w-lg bg-card border border-border rounded-3xl p-6 sm:p-8 shadow-2xl overflow-y-auto max-h-[85vh] text-left"
               >
-                <X className="w-4 h-4" />
-              </button>
+                {/* Dismiss button */}
+                <button
+                  onClick={() => setModalOpen(false)}
+                  className="absolute right-6 top-6 p-2 bg-foreground/5 hover:bg-foreground/10 rounded-full text-foreground/60 hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+ 
+                <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-4">
+                  {modalMode === 'add' ? 'Register New Client' : 'Modify Client Access'}
+                </h3>
 
-              <h3 className="text-lg font-black uppercase tracking-tight text-foreground mb-4">
-                {modalMode === 'add' ? 'Register New Client' : 'Modify Client Access'}
-              </h3>
+                <form onSubmit={handleSaveClient} className="space-y-4 text-xs">
+                  {formErrors.submit && (
+                    <div className="text-red-500 text-[10px] font-bold uppercase tracking-wider">
+                      {formErrors.submit}
+                    </div>
+                  )}
 
-              <form onSubmit={handleSaveClient} className="space-y-4 text-xs">
-                {/* Full name */}
-                <div className="flex flex-col">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Full Name *</label>
-                  <input
-                    type="text"
-                    value={clientForm.fullName}
-                    onChange={(e) => setClientForm({ ...clientForm, fullName: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                    placeholder="e.g. Younes Zerotohero"
-                  />
-                  {formErrors.fullName && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.fullName}</span>}
-                </div>
-
-                {/* Company */}
-                <div className="flex flex-col">
-                  <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Company / Contractor Name *</label>
-                  <input
-                    type="text"
-                    value={clientForm.company}
-                    onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                    placeholder="e.g. ElectroAlgiers E.U.R.L"
-                  />
-                  {formErrors.company && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.company}</span>}
-                </div>
-
-                {/* Email & Phone */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Full name */}
                   <div className="flex flex-col">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Email Address *</label>
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Full Name *</label>
                     <input
                       type="text"
-                      value={clientForm.email}
-                      onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                      value={clientForm.fullName}
+                      onChange={(e) => setClientForm({ ...clientForm, fullName: e.target.value })}
                       className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                      placeholder="e.g. contact@electroalgiers.com"
+                      placeholder="e.g. Younes Zerotohero"
                     />
-                    {formErrors.email && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.email}</span>}
+                    {formErrors.fullName && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.fullName}</span>}
                   </div>
-
+ 
+                  {/* Company */}
                   <div className="flex flex-col">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Phone Number (Algerian format) *</label>
+                    <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Company / Contractor Name *</label>
                     <input
                       type="text"
-                      value={clientForm.phone}
-                      onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold font-mono text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                      placeholder="e.g. 0561234567"
-                    />
-                    {formErrors.phone && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.phone}</span>}
-                  </div>
-                </div>
-
-                {/* Wilaya & Commune */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="flex flex-col">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Wilaya *</label>
-                    <select
-                      value={clientForm.wilaya}
-                      onChange={(e) => setClientForm({ ...clientForm, wilaya: e.target.value })}
-                      className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange cursor-pointer"
-                    >
-                      <option value="Algiers">Algiers</option>
-                      <option value="Oran">Oran</option>
-                      <option value="Constantine">Constantine</option>
-                      <option value="Blida">Blida</option>
-                      <option value="Setif">Setif</option>
-                      <option value="Annaba">Annaba</option>
-                      <option value="Tizi Ouzou">Tizi Ouzou</option>
-                      <option value="Bejaia">Bejaia</option>
-                      <option value="Tlemcen">Tlemcen</option>
-                    </select>
-                  </div>
-
-                  <div className="flex flex-col">
-                    <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Commune *</label>
-                    <input
-                      type="text"
-                      value={clientForm.commune}
-                      onChange={(e) => setClientForm({ ...clientForm, commune: e.target.value })}
+                      value={clientForm.company}
+                      onChange={(e) => setClientForm({ ...clientForm, company: e.target.value })}
                       className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                      placeholder="e.g. Hydra"
+                      placeholder="e.g. ElectroAlgiers E.U.R.L"
                     />
-                    {formErrors.commune && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.commune}</span>}
+                    {formErrors.company && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.company}</span>}
                   </div>
-                </div>
-
-                {/* Switch approval inside form */}
-                <div className="bg-foreground/[0.015] border border-border rounded-xl p-4 flex items-center justify-between">
-                  <div className="space-y-0.5 pr-2">
-                    <p className="font-bold text-foreground flex items-center gap-1">
-                      {clientForm.approved ? (
-                        <ShieldCheck className="w-4 h-4 text-kurima-orange" />
-                      ) : (
-                        <ShieldAlert className="w-4 h-4 text-red-500" />
-                      )}
-                      <span>Approve Account Status</span>
-                    </p>
-                    <p className="text-[9px] text-kurima-muted leading-tight">Approved accounts can request instant wholesale quotes.</p>
+ 
+                  {/* Email & Phone */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Email Address *</label>
+                      <input
+                        type="text"
+                        value={clientForm.email}
+                        onChange={(e) => setClientForm({ ...clientForm, email: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
+                        placeholder="e.g. contact@electroalgiers.com"
+                      />
+                      {formErrors.email && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.email}</span>}
+                    </div>
+ 
+                    <div className="flex flex-col">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Phone Number (Algerian format) *</label>
+                      <input
+                        type="text"
+                        value={clientForm.phone}
+                        onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold font-mono text-foreground focus:outline-none focus:border-kurima-orange transition-all"
+                        placeholder="e.g. 0561234567"
+                      />
+                      {formErrors.phone && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.phone}</span>}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setClientForm({ ...clientForm, approved: !clientForm.approved })}
-                    className={`w-12 h-6 rounded-full p-1 transition-all duration-300 relative cursor-pointer ${
-                      clientForm.approved ? 'bg-kurima-orange' : 'bg-foreground/10 border border-white/5'
-                    }`}
-                  >
-                    <motion.div
-                      layout
-                      className={`w-4 h-4 rounded-full shadow-md transition-all ${
-                        clientForm.approved ? 'bg-black translate-x-6' : 'bg-foreground/40'
+ 
+                  {/* Wilaya & Commune */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Wilaya *</label>
+                      <select
+                        value={clientForm.wilaya}
+                        onChange={(e) => setClientForm({ ...clientForm, wilaya: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange cursor-pointer"
+                      >
+                        <option value="Algiers">Algiers</option>
+                        <option value="Oran">Oran</option>
+                        <option value="Constantine">Constantine</option>
+                        <option value="Blida">Blida</option>
+                        <option value="Setif">Setif</option>
+                        <option value="Annaba">Annaba</option>
+                        <option value="Tizi Ouzou">Tizi Ouzou</option>
+                        <option value="Bejaia">Bejaia</option>
+                        <option value="Tlemcen">Tlemcen</option>
+                      </select>
+                    </div>
+ 
+                    <div className="flex flex-col">
+                      <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Commune *</label>
+                      <input
+                        type="text"
+                        value={clientForm.commune}
+                        onChange={(e) => setClientForm({ ...clientForm, commune: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
+                        placeholder="e.g. Hydra"
+                      />
+                      {formErrors.commune && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.commune}</span>}
+                    </div>
+                  </div>
+ 
+                  {/* Switch approval inside form */}
+                  <div className="bg-foreground/[0.015] border border-border rounded-xl p-4 flex items-center justify-between">
+                    <div className="space-y-0.5 pr-2">
+                      <p className="font-bold text-foreground flex items-center gap-1">
+                        {clientForm.approved ? (
+                          <ShieldCheck className="w-4 h-4 text-kurima-orange" />
+                        ) : (
+                          <ShieldAlert className="w-4 h-4 text-red-500" />
+                        )}
+                        <span>Approve Account Status</span>
+                      </p>
+                      <p className="text-[9px] text-kurima-muted leading-tight">Approved accounts can request instant wholesale quotes.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setClientForm({ ...clientForm, approved: !clientForm.approved })}
+                      className={`w-12 h-6 rounded-full p-1 transition-all duration-300 relative cursor-pointer ${
+                        clientForm.approved ? 'bg-kurima-orange' : 'bg-foreground/10 border border-white/5'
                       }`}
-                    />
-                  </button>
-                </div>
-
-                {/* Footer buttons */}
-                <div className="flex justify-end gap-3 pt-4 border-t border-foreground/5">
-                  <Button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    variant="outline"
-                    className="border-white/10 text-white rounded-full px-6 py-2.5 h-auto text-[10px] uppercase font-black tracking-widest transition-all cursor-pointer"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold px-6 py-2.5 h-auto text-[10px] uppercase tracking-widest rounded-full cursor-pointer shadow-lg shadow-kurima-orange/5"
-                  >
-                    {modalMode === 'add' ? 'Register Client' : 'Update Access'}
-                  </Button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+                    >
+                      <motion.div
+                        layout
+                        className={`w-4 h-4 rounded-full shadow-md transition-all ${
+                          clientForm.approved ? 'bg-black translate-x-6' : 'bg-foreground/40'
+                        }`}
+                      />
+                    </button>
+                  </div>
+ 
+                  {/* Footer buttons */}
+                  <div className="flex justify-end gap-3 pt-4 border-t border-foreground/5">
+                    <Button
+                      type="button"
+                      onClick={() => setModalOpen(false)}
+                      variant="outline"
+                      className="border-white/10 text-white rounded-full px-6 py-2.5 h-auto text-[10px] uppercase font-black tracking-widest transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold px-6 py-2.5 h-auto text-[10px] uppercase tracking-widest rounded-full cursor-pointer shadow-lg shadow-kurima-orange/5"
+                    >
+                      {modalMode === 'add' ? 'Register Client' : 'Update Access'}
+                    </Button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   )
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import api from '@/lib/api'
 import { 
   User, 
   Phone, 
@@ -36,6 +37,8 @@ export default function ProfilePage() {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const isRtl = i18n.language === 'ar'
+
+  const [shippingThreshold, setShippingThreshold] = useState(15000)
 
   // Profile Active Tab State
   const [activeTab, setActiveTab] = useState('details') // 'details' | 'orders'
@@ -83,85 +86,52 @@ export default function ProfilePage() {
     return `${translatedName} ${number}`
   }
 
-  // Load user data and order history from localStorage
+  // Load user data and order history from API
   useEffect(() => {
     window.scrollTo(0, 0)
 
-    // Load or initialize User Data
-    const storedUser = localStorage.getItem('currentUser')
-    if (storedUser) {
+    const loadProfileAndOrders = async () => {
       try {
-        setUserData(JSON.parse(storedUser))
-      } catch (e) {
-        console.error('Failed to parse currentUser from localStorage', e)
-      }
-    } else {
-      // Set initial values
-      localStorage.setItem('currentUser', JSON.stringify(userData))
-    }
+        const [publicSettings, user, myOrders] = await Promise.all([
+          api.getPublicSettings(),
+          api.getMe(),
+          api.getMyOrders(),
+        ])
 
-    // Load or initialize Order History
-    const storedOrders = localStorage.getItem('orderHistory')
-    if (storedOrders) {
-      try {
-        setOrders(JSON.parse(storedOrders))
-      } catch (e) {
-        console.error('Failed to parse orderHistory', e)
-      }
-    } else {
-      // Mock some realistic ElectroHub orders if none exist
-      const mockOrders = [
-        {
-          orderId: 'EH-2026-8941',
-          date: '2026-05-18',
-          items: [
-            {
-              id: 1,
-              name: 'Smart Circuit Breaker Pro',
-              price: 38500,
-              quantity: 2,
-              image: '/p1.jpg',
-              size: '40A Tri-Phase',
-              color: 'Industrial Black'
-            },
-            {
-              id: 4,
-              name: 'Premium Double Wall Switch',
-              price: 9500,
-              quantity: 5,
-              image: '/p4.jpg',
-              size: 'Double Gang',
-              color: 'Neon Accent'
-            }
-          ],
-          total: 124500,
-          shippingCost: 0,
-          status: 'delivered', // pending | confirmed | shipped | delivered
-          shippingAddress: '12 Rue Sidi Yahia, Hydra, Algiers (16)'
-        },
-        {
-          orderId: 'EH-2026-7452',
-          date: '2026-05-24',
-          items: [
-            {
-              id: 3,
-              name: 'Heavy Duty Copper Cable',
-              price: 14500,
-              quantity: 10,
-              image: '/p3.jpg',
-              size: '16mm² 50m Roll',
-              color: 'Insulated Orange'
-            }
-          ],
-          total: 145000,
-          shippingCost: 0,
-          status: 'shipped',
-          shippingAddress: '12 Rue Sidi Yahia, Hydra, Algiers (16)'
+        setShippingThreshold(Number(publicSettings.minFreeDelivery || 15000))
+
+        const mappedUser = {
+          ...user,
+          name: user.fullName
         }
-      ]
-      setOrders(mockOrders)
-      localStorage.setItem('orderHistory', JSON.stringify(mockOrders))
-    }
+        setUserData(mappedUser)
+        localStorage.setItem('currentUser', JSON.stringify(mappedUser))
+
+        const mappedOrders = myOrders.map(o => ({
+          ...o,
+          date: new Date(o.date).toISOString().split('T')[0],
+          status: o.status.toLowerCase(), // frontend uses lowercase status
+          shippingCost: Number(o.shippingFee),
+          shippingAddress: `${o.addressDetails ? `${o.addressDetails}, ` : ''}${o.commune}, ${o.wilaya}`,
+          items: o.items.map(item => ({
+            ...item,
+            price: Number(item.price),
+          }))
+        }));
+        setOrders(mappedOrders);
+      } catch (e) {
+        console.error('Failed to load profile/orders from backend, fallback to localStorage', e);
+        // Fallback to localStorage
+        const storedUser = localStorage.getItem('currentUser')
+        if (storedUser) {
+          try {
+            setUserData(JSON.parse(storedUser))
+          } catch (err) {}
+        }
+      }
+    };
+
+    loadProfileAndOrders();
   }, [])
 
   // Form Validation
@@ -186,28 +156,42 @@ export default function ProfilePage() {
   }
 
   // Handle Save Profile Changes
-  const handleSaveChanges = (e) => {
+  const handleSaveChanges = async (e) => {
     e.preventDefault()
     if (!validateForm()) return
 
     setIsSaving(true)
-    setTimeout(() => {
-      setIsSaving(false)
-      setSaveSuccess(true)
-      localStorage.setItem('currentUser', JSON.stringify(userData))
-      
-      // Clear success notification after 3 seconds
-      setTimeout(() => {
-        setSaveSuccess(false)
-      }, 3000)
-    }, 1200)
+    setFormErrors({})
+    try {
+      const updatedUser = await api.updateProfile({
+        fullName: userData.name,
+        email: userData.email,
+        phone: userData.phone,
+        company: userData.company,
+        wilaya: userData.wilaya,
+        commune: userData.commune
+      });
+
+      const mappedUser = {
+        ...updatedUser,
+        name: updatedUser.fullName
+      };
+
+      setUserData(mappedUser);
+      localStorage.setItem('currentUser', JSON.stringify(mappedUser));
+      setIsSaving(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setIsSaving(false);
+      setFormErrors({ submit: err.message || 'Failed to update profile.' });
+    }
   }
 
-  // Handle Logout Simulation
+  // Handle Logout
   const handleLogout = () => {
-    // We clear current user and session variables, then redirect to login page
+    localStorage.removeItem('token')
     localStorage.removeItem('currentUser')
-    // Reset defaults so they can log back in
     navigate('/login')
   }
 
@@ -328,7 +312,7 @@ export default function ProfilePage() {
             <div className="bg-background/40 border border-foreground/5 p-5 rounded-2xl text-left rtl:text-right group hover:border-kurima-orange/20 transition-all duration-300">
               <span className="text-[10px] font-black uppercase tracking-widest text-kurima-muted">{t('profile.totalSpent', 'Total Invested')}</span>
               <div className="flex items-baseline gap-1 mt-2">
-                <span className="text-2xl sm:text-3xl font-black text-kurima-orange">{totalSpent.toLocaleString()}</span>
+                <span className="text-2xl sm:text-3xl font-black text-black dark:text-kurima-orange">{totalSpent.toLocaleString()}</span>
                 <span className="text-xs font-bold text-foreground uppercase">DA</span>
               </div>
             </div>
@@ -549,7 +533,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
 
-                  {/* Save Status Notifications */}
+                   {/* Save Status Notifications */}
                   <AnimatePresence>
                     {saveSuccess && (
                       <motion.div
@@ -560,6 +544,16 @@ export default function ProfilePage() {
                       >
                         <ShieldCheck className="w-4 h-4" />
                         <span>{t('profile.saveSuccess', 'Profile updated successfully!')}</span>
+                      </motion.div>
+                    )}
+                    {formErrors.submit && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="bg-red-500/10 border border-red-500/20 text-red-500 p-4 rounded-2xl text-xs font-bold uppercase tracking-wider flex items-center gap-2"
+                      >
+                        <span>{formErrors.submit}</span>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -608,7 +602,9 @@ export default function ProfilePage() {
                       <Truck className="w-5 h-5 text-kurima-orange shrink-0" />
                       <div>
                         <h5 className="text-xs font-black uppercase text-foreground">{t('product.freeShipping', 'Bulk Shipping')}</h5>
-                        <p className="text-[10px] text-kurima-muted mt-0.5">{t('product.freeShippingDesc', 'On orders over 15,000 DA')}</p>
+                        <p className="text-[10px] text-kurima-muted mt-0.5">
+                          {t('product.freeShippingDesc', 'On orders over 15,000 DA').replace(/15[,.\s]?000/g, shippingThreshold.toLocaleString())}
+                        </p>
                       </div>
                     </div>
                     <div className="flex gap-3">
@@ -691,7 +687,7 @@ export default function ProfilePage() {
 
                             <div>
                               <span className="text-[9px] font-black uppercase tracking-widest text-kurima-muted">{t('profile.total', 'Total')}</span>
-                              <p className="text-sm font-black text-kurima-orange mt-0.5">{(order.total).toLocaleString()} DA</p>
+                              <p className="text-sm font-black text-black dark:text-kurima-orange mt-0.5">{(order.total).toLocaleString()} DA</p>
                             </div>
                           </div>
 
@@ -733,7 +729,7 @@ export default function ProfilePage() {
                                         <div className="flex-1 min-w-0 flex flex-col justify-between text-left rtl:text-right">
                                           <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1">
                                             <h5 className="font-bold text-xs text-foreground truncate max-w-xs">{item.name}</h5>
-                                            <span className="font-black text-kurima-orange text-xs">{(item.price * item.quantity).toLocaleString()} DA</span>
+                                            <span className="font-black text-black dark:text-kurima-orange text-xs">{(item.price * item.quantity).toLocaleString()} DA</span>
                                           </div>
                                           
                                           <div className="flex flex-wrap items-center justify-between gap-2 mt-2">
@@ -802,7 +798,7 @@ export default function ProfilePage() {
                                       <Separator className="bg-foreground/5 my-1.5" />
                                       <div className="flex justify-between items-center">
                                         <span className="font-bold text-foreground">{t('profile.total', 'Paid amount (COD):')}</span>
-                                        <span className="font-black text-kurima-orange text-sm">{order.total.toLocaleString()} DA</span>
+                                        <span className="font-black text-black dark:text-kurima-orange text-sm">{order.total.toLocaleString()} DA</span>
                                       </div>
                                     </div>
                                   </div>

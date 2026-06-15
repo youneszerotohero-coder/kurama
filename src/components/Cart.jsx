@@ -1,10 +1,12 @@
+import { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck } from 'lucide-react'
+import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck, Download } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
+import { jsPDF } from 'jspdf'
 
 export default function Cart() {
   const { t } = useTranslation()
@@ -19,12 +21,139 @@ export default function Cart() {
     cartTotal,
   } = useCart()
 
-  const SHIPPING_THRESHOLD = 15000
+  const SHIPPING_THRESHOLD = useMemo(() => {
+    const stored = localStorage.getItem('admin_settings')
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (parsed.minFreeDelivery !== undefined) {
+          return Number(parsed.minFreeDelivery)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    return 15000
+  }, [])
   const progressPercent = Math.min((cartTotal / SHIPPING_THRESHOLD) * 100, 100)
   const remainingForFreeShipping = SHIPPING_THRESHOLD - cartTotal
 
   const formatPrice = (val) => {
     return new Intl.NumberFormat().format(val)
+  }
+
+  const handleDownloadProforma = () => {
+    const doc = new jsPDF()
+
+    // Color Palette
+    const primaryColor = [249, 115, 22] // #f97316 (Kurima Orange)
+    const textColor = [20, 20, 20]
+    const lightGray = [245, 245, 245]
+
+    // Title / Header background banner
+    doc.setFillColor(...primaryColor)
+    doc.rect(0, 0, 210, 40, 'F')
+
+    // Title / Header text
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(22)
+    doc.text('KURIMA SOLUTIONS', 15, 18)
+    
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    doc.text('Premium Smart & Powerful Electrical Solutions', 15, 25)
+    doc.text('Contact: contact@kurima.dz | +213 (0) 555 12 34 56', 15, 30)
+
+    doc.setFontSize(14)
+    doc.setFont('helvetica', 'bold')
+    doc.text('PROFORMA INVOICE', 145, 18)
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.text(`Reference: PRO-${Date.now().toString().slice(-6)}`, 145, 25)
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 145, 30)
+
+    // Customer Info Placeholder
+    doc.setTextColor(...textColor)
+    doc.setFontSize(10)
+    doc.setFont('helvetica', 'bold')
+    doc.text('PROFORMA TO:', 15, 55)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Corporate Energy Buyer / Partner', 15, 60)
+    doc.text('Request via: Online Showroom platform', 15, 65)
+
+    // Table Header
+    doc.setFillColor(...lightGray)
+    doc.rect(15, 75, 180, 8, 'F')
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9)
+    doc.text('Product Description', 18, 80)
+    doc.text('Reference', 90, 80)
+    doc.text('Price (DA)', 130, 80)
+    doc.text('Qty', 160, 80)
+    doc.text('Total (DA)', 175, 80)
+
+    let yPosition = 90
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8.5)
+
+    cartItems.forEach((item) => {
+      // Handle page overflow if we have many items
+      if (yPosition > 260) {
+        doc.addPage()
+        yPosition = 20
+      }
+
+      const ref = item.ref || `REF-P${item.id}`
+      const nameText = item.name.length > 45 ? item.name.substring(0, 42) + '...' : item.name
+      const specText = (item.size || item.color) ? ` (${item.size || ''}${item.size && item.color ? ' / ' : ''}${item.color || ''})` : ''
+      
+      doc.text(`${nameText}${specText}`, 18, yPosition)
+      doc.text(ref, 90, yPosition)
+      doc.text(formatPrice(item.price), 130, yPosition)
+      doc.text(item.quantity.toString(), 162, yPosition)
+      doc.text(formatPrice(item.price * item.quantity), 175, yPosition)
+
+      doc.setDrawColor(230, 230, 230)
+      doc.line(15, yPosition + 4, 195, yPosition + 4)
+      yPosition += 10
+    })
+
+    // Totals Block
+    if (yPosition > 240) {
+      doc.addPage()
+      yPosition = 20
+    }
+
+    yPosition += 5
+    doc.setFont('helvetica', 'bold')
+    doc.text('Estimated Subtotal:', 130, yPosition)
+    doc.text(`${formatPrice(cartTotal)} DA`, 175, yPosition)
+
+    const shippingCost = cartTotal >= SHIPPING_THRESHOLD ? 0 : 1200
+    yPosition += 6
+    doc.text('Bulk Logistics / Shipping:', 130, yPosition)
+    doc.text(shippingCost === 0 ? 'FREE' : `${formatPrice(shippingCost)} DA`, 175, yPosition)
+
+    yPosition += 8
+    doc.setFillColor(...primaryColor)
+    doc.rect(125, yPosition - 4, 70, 8, 'F')
+    doc.setTextColor(255, 255, 255)
+    doc.setFont('helvetica', 'bold')
+    doc.text('GRAND TOTAL:', 130, yPosition + 1)
+    doc.text(`${formatPrice(cartTotal + shippingCost)} DA`, 175, yPosition + 1)
+
+    // Footer Terms
+    yPosition += 25
+    doc.setTextColor(120, 120, 120)
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(8)
+    doc.text('Terms & Conditions:', 15, yPosition)
+    doc.text('1. This proforma invoice serves as a commercial estimate and does not constitute a final binding contract.', 15, yPosition + 5)
+    doc.text('2. All prices are denominated in Algerian Dinars (DA) and are valid for a period of 15 days from the date of issuance.', 15, yPosition + 10)
+    doc.text('3. Corporate discounts and customized tax exemptions (if applicable) will be evaluated upon final submission of the quote.', 15, yPosition + 15)
+
+    doc.save(`proforma_invoice_${Date.now().toString().slice(-6)}.pdf`)
   }
 
   // Sidebar container animation variants
@@ -104,14 +233,14 @@ export default function Cart() {
               <div className="px-6 py-4 bg-kurima-orange/5 border-b border-kurima-orange/10 flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground/90">
                   {progressPercent >= 100 ? (
-                    <span className="flex items-center gap-1.5 text-kurima-orange">
+                    <span className="flex items-center gap-1.5 text-black dark:text-kurima-orange">
                       <Truck className="w-4 h-4 animate-bounce" />
                       {t('cart.freeShipping', 'Your order qualifies for Free Bulk Shipping!')}
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">
                       <Truck className="w-4 h-4 text-foreground/50" />
-                      {t('cart.addMorePrefix', 'Add ')}<span className="text-kurima-orange font-black">{formatPrice(remainingForFreeShipping)} DA</span>{t('cart.addMoreSuffix', ' more for free bulk delivery.')}
+                      {t('cart.addMorePrefix', 'Add ')}<span className="text-black dark:text-kurima-orange font-black">{formatPrice(remainingForFreeShipping)} DA</span>{t('cart.addMoreSuffix', ' more for free bulk delivery.')}
                     </span>
                   )}
                 </div>
@@ -212,7 +341,7 @@ export default function Cart() {
 
                           {/* Price & Quantity Control */}
                           <div className="flex items-center justify-between gap-4 mt-3">
-                            <span className="font-black text-sm text-kurima-orange">
+                            <span className="font-black text-sm text-black dark:text-kurima-orange">
                               {formatPrice(item.price * item.quantity)} DA
                             </span>
 
@@ -268,6 +397,14 @@ export default function Cart() {
                   >
                     {t('cart.checkout', 'Proceed to Checkout')}
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1.5 transition-transform duration-300" />
+                  </Button>
+
+                  <Button
+                    onClick={handleDownloadProforma}
+                    className="w-full bg-transparent border border-white/10 hover:border-kurima-orange hover:bg-kurima-orange/5 text-foreground hover:text-kurima-orange font-bold py-5 rounded-full text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer transition-all"
+                  >
+                    <Download className="w-4 h-4" />
+                    {t('cart.downloadProforma', 'Download Proforma (PDF)')}
                   </Button>
                   
                   <div className="flex items-center justify-center gap-2 text-[10px] text-kurima-muted font-semibold">

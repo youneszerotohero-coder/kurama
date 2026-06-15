@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import api from '@/lib/api'
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -10,7 +11,8 @@ import {
   Activity,
   ChevronRight,
   LogOut,
-  User
+  User,
+  MapPin
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -24,34 +26,30 @@ export default function AdminLayout() {
 
   // Calculate quick stock valuation on load/route change
   useEffect(() => {
-    // Stock Valuation
-    const storedProds = localStorage.getItem('admin_products')
-    if (storedProds) {
+    const loadAdminSnapshot = async () => {
       try {
-        const prods = JSON.parse(storedProds)
-        const valuation = prods.reduce((sum, p) => sum + (p.priceSold * p.quantity), 0)
-        setStockValuation(valuation)
+        const [products, me] = await Promise.all([
+          api.adminGetProducts(),
+          api.getMe(),
+        ])
+
+        setStockValuation(
+          products.reduce((sum, product) => sum + (Number(product.priceSold) * Number(product.quantity)), 0)
+        )
+        setAdminUsername(me.fullName || adminUsername)
       } catch (e) {
-        console.error(e)
+        console.error('Failed to load admin layout snapshot:', e)
       }
     }
-    
-    // Admin Username
-    const storedSettings = localStorage.getItem('admin_settings')
-    if (storedSettings) {
-      try {
-        const settings = JSON.parse(storedSettings)
-        if (settings.adminUsername) setAdminUsername(settings.adminUsername)
-      } catch (e) {
-        console.error(e)
-      }
-    }
+
+    loadAdminSnapshot()
   }, [location.pathname])
 
   const menuItems = [
     { id: 'dashboard', path: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'products', path: '/admin/products', label: 'Showroom Catalog', icon: ShoppingBag },
     { id: 'orders', path: '/admin/orders', label: 'Orders Logistics', icon: Truck },
+    { id: 'shipping', path: '/admin/shipping', label: 'Shipping Rates', icon: MapPin },
     { id: 'clients', path: '/admin/clients', label: 'Client Accounts', icon: Users },
     { id: 'settings', path: '/admin/settings', label: 'Global Settings', icon: Settings }
   ]

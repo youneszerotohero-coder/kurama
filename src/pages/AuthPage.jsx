@@ -5,6 +5,7 @@ import { Phone, Lock, User, Eye, EyeOff, ArrowRight, ShieldCheck, Sparkles, Chec
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useTranslation } from 'react-i18next'
+import api from '@/lib/api'
 
 export default function AuthPage() {
   const { t } = useTranslation()
@@ -48,27 +49,41 @@ export default function AuthPage() {
     if (!validateForm()) return
 
     setIsLoading(true)
-    // Simulate API request
-    setTimeout(() => {
-      setIsLoading(false)
-      setIsSuccess(true)
-
-      // Save user to localStorage
-      const mockUser = {
-        name: isLogin ? (name || 'Younes Coder') : name,
-        phone: phone || '0550123456',
-        email: phone ? `${phone.trim()}@electrohub.dz` : 'younes.coder@electrohub.dz',
-        company: 'ElectroTech Solutions DZ',
-        wilaya: 'Algiers (16)',
-        commune: 'Hydra'
+    setErrors({})
+    try {
+      let data;
+      if (isLogin) {
+        data = await api.login({ phone, password });
+      } else {
+        data = await api.register({ fullName: name, phone, password });
       }
-      localStorage.setItem('currentUser', JSON.stringify(mockUser))
+
+      // Map backend response fields to frontend compatibility format
+      const mappedUser = {
+        ...data.user,
+        name: data.user.fullName, // map fullName to name
+      };
+
+      // Save token and mapped user to localStorage
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('currentUser', JSON.stringify(mappedUser));
+
+      setIsLoading(false);
+      setIsSuccess(true);
 
       setTimeout(() => {
-        navigate('/profile')
-      }, 2000)
-    }, 1500)
+        if (mappedUser.role === 'ADMIN') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/profile');
+        }
+      }, 2000);
+    } catch (err) {
+      setIsLoading(false);
+      setErrors({ submit: err.message || 'Authentication failed. Please try again.' });
+    }
   }
+
 
   return (
     <div className="w-full h-[100vh] grid md:grid-cols-12 relative z-10">
@@ -275,6 +290,12 @@ export default function AuthPage() {
                         <a href="#forgot" className="text-[10px] font-bold text-kurima-orange hover:underline uppercase tracking-wider">
                           {t('auth.forgotPassword')}
                         </a>
+                      </div>
+                    )}
+
+                    {errors.submit && (
+                      <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold p-3.5 rounded-2xl uppercase tracking-wider text-center">
+                        {errors.submit}
                       </div>
                     )}
 

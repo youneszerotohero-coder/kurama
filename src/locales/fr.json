@@ -209,6 +209,8 @@
     "selectCategory": "Sélectionner la Catégorie",
     "selectManufacturer": "Sélectionner le Fabricant",
     "allManufacturers": "Tous les Fabricants",
+    "selectGamme": "Sélectionner la Gamme",
+    "allGammes": "Toutes les Gammes",
     "maxBudget": "Budget Maximum",
     "inStockOnly": "En Stock Uniquement",
     "inStockDesc": "Exclut les articles en rupture",

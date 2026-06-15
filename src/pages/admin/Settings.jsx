@@ -12,15 +12,15 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import api from '@/lib/api'
 
 export default function Settings() {
   const [settings, setSettings] = useState({
     deliveryApiKey: '',
     metaPixelId: '',
+    minFreeDelivery: 15000,
     adminUsername: 'admin',
     adminEmail: 'admin@kurama.dz',
-    adminPassword: '',
-    confirmPassword: ''
   })
 
   const [formErrors, setFormErrors] = useState({})
@@ -29,21 +29,27 @@ export default function Settings() {
 
   // Load settings on mount
   useEffect(() => {
-    const stored = localStorage.getItem('admin_settings')
-    if (stored) {
+    const loadSettings = async () => {
       try {
-        const parsed = JSON.parse(stored)
+        const [adminSettings, me] = await Promise.all([
+          api.getAdminSettings(),
+          api.getMe(),
+        ])
+
         setSettings(prev => ({
           ...prev,
-          deliveryApiKey: parsed.deliveryApiKey || '',
-          metaPixelId: parsed.metaPixelId || '',
-          adminUsername: parsed.adminUsername || 'admin',
-          adminEmail: parsed.adminEmail || 'admin@kurama.dz'
+          deliveryApiKey: adminSettings.deliveryApiKey || '',
+          metaPixelId: adminSettings.metaPixelId || '',
+          minFreeDelivery: adminSettings.minFreeDelivery !== undefined ? Number(adminSettings.minFreeDelivery) : 15000,
+          adminUsername: me.fullName || 'admin',
+          adminEmail: me.email || 'admin@kurama.dz'
         }))
       } catch (e) {
-        console.error(e)
+        console.error('Failed to load backend settings:', e)
       }
     }
+
+    loadSettings()
   }, [])
 
   // Trigger sandboxed API Delivery Ping test
@@ -77,42 +83,36 @@ export default function Settings() {
       errors.adminUsername = 'Admin username is required.'
     }
 
-    // Password change check
-    if (settings.adminPassword) {
-      if (settings.adminPassword.length < 6) {
-        errors.adminPassword = 'Password must be at least 6 characters.'
-      }
-      if (settings.adminPassword !== settings.confirmPassword) {
-        errors.confirmPassword = 'Passwords do not match.'
-      }
+    if (settings.minFreeDelivery === undefined || settings.minFreeDelivery === null || settings.minFreeDelivery === '' || Number(settings.minFreeDelivery) < 0) {
+      errors.minFreeDelivery = 'Free delivery threshold must be a valid non-negative number.'
     }
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
-  const handleSaveSettings = (e) => {
+  const handleSaveSettings = async (e) => {
     e.preventDefault()
     if (!validateForm()) return
 
-    const settingsToSave = {
-      deliveryApiKey: settings.deliveryApiKey,
-      metaPixelId: settings.metaPixelId,
-      adminUsername: settings.adminUsername,
-      adminEmail: settings.adminEmail
+    try {
+      await Promise.all([
+        api.updateSettings({
+          deliveryApiKey: settings.deliveryApiKey,
+          metaPixelId: settings.metaPixelId,
+          minFreeDelivery: Number(settings.minFreeDelivery),
+        }),
+        api.updateProfile({
+          fullName: settings.adminUsername,
+          email: settings.adminEmail,
+        }),
+      ])
+
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 4000)
+    } catch (e) {
+      setFormErrors({ submit: e.message || 'Failed to save settings.' })
     }
-
-    localStorage.setItem('admin_settings', JSON.stringify(settingsToSave))
-    
-    // Clear passwords
-    setSettings(prev => ({
-      ...prev,
-      adminPassword: '',
-      confirmPassword: ''
-    }))
-
-    setSaveSuccess(true)
-    setTimeout(() => setSaveSuccess(false), 4000)
   }
 
   return (
@@ -153,6 +153,17 @@ export default function Settings() {
                 placeholder="••••••••••••••••••••••••••••••••"
               />
             </div>
+
+            <div className="w-full sm:w-48 flex flex-col">
+              <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Min. Free Delivery (DA)</label>
+              <input
+                type="number"
+                value={settings.minFreeDelivery}
+                onChange={(e) => setSettings({ ...settings, minFreeDelivery: e.target.value })}
+                className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
+                placeholder="15000"
+              />
+            </div>
             
             <button
               type="button"
@@ -166,6 +177,11 @@ export default function Settings() {
               {pingState === 'error' && <span className="text-red-500">API Key Missing</span>}
             </button>
           </div>
+          {formErrors.minFreeDelivery && (
+            <span className="text-[9px] text-red-500 font-bold block mt-1 uppercase tracking-wider">
+              {formErrors.minFreeDelivery}
+            </span>
+          )}
           <p className="text-[9px] text-kurima-muted leading-relaxed">
             Integrating with national shippers automatically pushes confirmed order files into their dashboard, facilitating instant printing of tracking barcodes.
           </p>
@@ -227,33 +243,9 @@ export default function Settings() {
           </div>
 
           <Separator className="bg-foreground/5 my-2" />
-          <p className="text-[9px] text-kurima-muted font-bold uppercase tracking-wider mb-2">Change Secure Password (leave blank to keep current)</p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex flex-col">
-              <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">New Password</label>
-              <input
-                type="password"
-                value={settings.adminPassword}
-                onChange={(e) => setSettings({ ...settings, adminPassword: e.target.value })}
-                className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                placeholder="••••••"
-              />
-              {formErrors.adminPassword && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.adminPassword}</span>}
-            </div>
-
-            <div className="flex flex-col">
-              <label className="text-[9px] font-bold uppercase tracking-wider text-kurima-muted mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                value={settings.confirmPassword}
-                onChange={(e) => setSettings({ ...settings, confirmPassword: e.target.value })}
-                className="w-full px-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-xl text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange transition-all"
-                placeholder="••••••"
-              />
-              {formErrors.confirmPassword && <span className="text-[9px] text-red-500 font-bold mt-1 uppercase tracking-wider">{formErrors.confirmPassword}</span>}
-            </div>
-          </div>
+          <p className="text-[9px] text-kurima-muted leading-relaxed">
+            Admin identity fields are synced with the authenticated profile. Password changes are handled separately from this settings panel.
+          </p>
         </div>
 
         {/* Global Save Button */}
@@ -265,6 +257,12 @@ export default function Settings() {
             Save All Configurations
           </Button>
         </div>
+
+        {formErrors.submit && (
+          <div className="text-red-500 text-[10px] font-bold uppercase tracking-wider">
+            {formErrors.submit}
+          </div>
+        )}
       </form>
     </motion.div>
   )

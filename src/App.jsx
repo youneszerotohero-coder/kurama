@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom'
 import {
@@ -37,12 +37,15 @@ import ShopPage from '@/pages/ShopPage'
 import CheckoutPage from '@/pages/CheckoutPage'
 import AuthPage from '@/pages/AuthPage'
 import ProfilePage from '@/pages/ProfilePage'
+import ComparePage from '@/pages/ComparePage'
 import AdminLayout from '@/pages/admin/AdminLayout'
 import AdminDashboard from '@/pages/admin/Dashboard'
 import AdminProducts from '@/pages/admin/Products'
 import AdminOrders from '@/pages/admin/Orders'
 import AdminClients from '@/pages/admin/Clients'
 import AdminSettings from '@/pages/admin/Settings'
+import AdminShippingRates from '@/pages/admin/ShippingRates'
+import ProtectedRoute from '@/components/ProtectedRoute'
 import { ThemeTogglerButton as ThemeToggler } from '@/components/animate-ui/components/buttons/theme-toggler'
 import { useTranslation } from 'react-i18next'
 import { Globe } from 'lucide-react'
@@ -54,116 +57,20 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { CartProvider, useCart } from '@/context/CartContext'
 import Cart from '@/components/Cart'
+import api from '@/lib/api'
 
 // ─────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────
 
-const megaCategories = [
-  {
-    id: 'featured',
-    name: 'Featured Solutions',
-    icon: '⭐',
-    items: [
-      { name: 'Smart Breakers', image: '/product-1.png', tag: 'new' },
-      { name: 'Energy Monitors', image: '/product-2.png', tag: 'hot' },
-      { name: 'Copper Cables', image: '/product-3.png', tag: 'new' },
-      { name: 'Double Switches', image: '/product-4.png', tag: 'hot' },
-      { name: 'Solar Inverters', image: '/bg1.jpg', tag: 'new' },
-      { name: 'Lithium Battery', image: '/bg2.jpg', tag: 'hot' },
-    ]
-  },
-  {
-    id: 'distribution',
-    name: 'Power Distribution',
-    icon: '⚡',
-    items: [
-      { name: 'Circuit Breakers', image: '/product-1.png', tag: 'hot' },
-      { name: 'Distribution Boards', image: '/product-2.png' },
-      { name: 'Safety Switches', image: '/product-3.png' },
-      { name: 'Surge Protectors', image: '/product-4.png', tag: 'new' },
-      { name: 'Contactors', image: '/bg1.jpg' },
-      { name: 'Relay Modules', image: '/bg2.jpg' },
-    ]
-  },
-  {
-    id: 'smart',
-    name: 'Smart Grid Automation',
-    icon: '📱',
-    items: [
-      { name: 'Energy Monitors', image: '/product-2.png', tag: 'hot' },
-      { name: 'Smart Meters', image: '/product-1.png', tag: 'new' },
-      { name: 'Wi-Fi Switches', image: '/product-4.png', tag: 'hot' },
-      { name: 'IoT Hubs', image: '/product-3.png' },
-      { name: 'Dimmer Controls', image: '/bg1.jpg' },
-      { name: 'Voice Modules', image: '/bg2.jpg' },
-    ]
-  },
-  {
-    id: 'cabling',
-    name: 'Industrial Cabling',
-    icon: '🔌',
-    items: [
-      { name: 'Copper Wire', image: '/product-3.png', tag: 'hot' },
-      { name: 'Armored Cables', image: '/product-4.png' },
-      { name: 'Coaxial Cables', image: '/product-1.png' },
-      { name: 'Conduits & Pipes', image: '/product-2.png', tag: 'new' },
-      { name: 'Cable Trays', image: '/bg1.jpg' },
-    ]
-  },
-  {
-    id: 'renewable',
-    name: 'Renewable Energy',
-    icon: '☀️',
-    items: [
-      { name: 'Solar Panels', image: '/bg1.jpg', tag: 'hot' },
-      { name: 'Solar Inverters', image: '/product-1.png', tag: 'new' },
-      { name: 'Lithium Battery', image: '/bg2.jpg', tag: 'hot' },
-      { name: 'Charge Control', image: '/product-3.png' },
-      { name: 'Wind Turbines', image: '/product-4.png' },
-    ]
-  }
-]
-
-const megaBrands = [
-  {
-    id: 'grid-automation',
-    name: 'Grid & Automation',
-    icon: '🏢',
-    items: [
-      { name: 'Siemens', logo: '/product-1.png', origin: 'Germany', tag: 'Partner' },
-      { name: 'Schneider', logo: '/product-2.png', origin: 'France', tag: 'Preferred' },
-      { name: 'ABB', logo: '/product-3.png', origin: 'Switzerland', tag: 'Partner' },
-      { name: 'Alstom', logo: '/product-4.png', origin: 'France' },
-    ]
-  },
-  {
-    id: 'electrical-equip',
-    name: 'Infrastructure',
-    icon: '⚡',
-    items: [
-      { name: 'Legrand', logo: '/product-2.png', origin: 'France', tag: 'Partner' },
-      { name: 'Eaton', logo: '/product-1.png', origin: 'USA' },
-      { name: 'General Electric', logo: '/product-3.png', origin: 'USA', tag: 'Legacy' },
-    ]
-  },
-  {
-    id: 'smart-lighting',
-    name: 'Smart & Lighting',
-    icon: '💡',
-    items: [
-      { name: 'Philips', logo: '/product-4.png', origin: 'Netherlands', tag: 'Preferred' },
-      { name: 'Tesla', logo: '/bg1.jpg', origin: 'USA', tag: 'New' },
-      { name: 'Honeywell', logo: '/bg2.jpg', origin: 'USA' },
-    ]
-  }
-]
+// megaCategories and megaBrands are now dynamically loaded from the database in the Navbar component.
 
 const getNavLinks = (t) => [
   { label: t('nav.home'), href: '/' },
   { label: t('nav.brands'), href: '#brands', hasBrandsMegaMenu: true },
   { label: t('nav.categories'), href: '#categories', hasMegaMenu: true },
   { label: t('nav.shop'), href: '/shop' },
+  { label: t('nav.compare', 'Compare'), href: '/compare' },
 ]
 
 const getHeroSlides = (t) => [
@@ -183,69 +90,8 @@ const getHeroSlides = (t) => [
   },
 ]
 
-const featuredProducts = [
-  {
-    id: 1,
-    name: 'Smart Circuit Breaker Pro',
-    price: '38,500',
-    originalPrice: '45,000',
-    image: '/p1.jpg',
-    tag: 'tags.bestSeller',
-    category: 'categories.outerwear',
-  },
-  {
-    id: 2,
-    name: 'Intelligent Energy Monitor',
-    price: '18,900',
-    image: '/p2.jpg',
-    tag: 'tags.new',
-    category: 'categories.hoodies',
-  },
-  {
-    id: 3,
-    name: 'Heavy Duty Copper Cable',
-    price: '14,500',
-    image: '/p3.jpg',
-    tag: 'tags.trending',
-    category: 'categories.bottoms',
-  },
-  {
-    id: 4,
-    name: 'Premium Double Wall Switch',
-    price: '9,500',
-    originalPrice: '12,000',
-    image: '/p4.jpg',
-    tag: 'tags.sale',
-    category: 'categories.accessories',
-  },
-]
 
-const collections = [
-  {
-    name: 'collectionsData.essentialsName',
-    description: 'collectionsData.essentialsDesc',
-    image: '/hero-1.png',
-    items: 24,
-  },
-  {
-    name: 'collectionsData.modernistName',
-    description: 'collectionsData.modernistDesc',
-    image: '/hero-3.jpg',
-    items: 32,
-  },
-  {
-    name: 'collectionsData.enduringName',
-    description: 'collectionsData.enduringDesc',
-    image: '/hero-2.png',
-    items: 18,
-  },
-  {
-    name: 'collectionsData.eliteName',
-    description: 'collectionsData.eliteDesc',
-    image: '/product-1.png',
-    items: 12,
-  },
-]
+// Collections/gammes are now dynamically fetched from the database.
 
 const brands = [
   'SIEMENS', 'SCHNEIDER', 'ABB', 'LEGRAND', 'PHILIPS', 'EATON', 'GENERAL ELECTRIC', 'HONEYWELL', 'ALSTOM', 'TESLA'
@@ -260,37 +106,30 @@ const features = [
   { icon: Star, title: 'product.quality', desc: 'product.qualityDesc' },
 ]
 
-function LanguageSwitcher() {
+function FloatingLanguageSwitcher() {
   const { i18n } = useTranslation()
 
   const languages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'ar', name: 'العربية', flag: '🇩🇿' },
+    { code: 'fr', label: 'FR' },
+    { code: 'ar', label: 'AR' },
   ]
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="p-2 text-foreground/70 hover:text-kurima-orange transition-colors cursor-pointer">
-          <Globe className="w-5 h-5" />
+    <div className="fixed bottom-6 right-6 z-[999] flex items-center bg-background/90 dark:bg-[#06090F]/90 backdrop-blur-md border border-border p-1.5 rounded-full shadow-2xl">
+      {languages.map((lang) => (
+        <button
+          key={lang.code}
+          onClick={() => i18n.changeLanguage(lang.code)}
+          className={`px-3 py-1.5 rounded-full text-xs font-black tracking-wider transition-all duration-300 cursor-pointer ${
+            i18n.language === lang.code
+              ? 'bg-kurima-orange text-black shadow-lg shadow-kurima-orange/20 scale-105'
+              : 'text-foreground/70 hover:text-kurima-orange hover:bg-foreground/5'
+          }`}
+        >
+          {lang.label}
         </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-background border-border z-[100]">
-        {languages.map((lang) => (
-          <DropdownMenuItem
-            key={lang.code}
-            onClick={() => i18n.changeLanguage(lang.code)}
-            className={`flex items-center gap-2 cursor-pointer ${
-              i18n.language === lang.code ? 'text-kurima-orange font-bold' : 'text-foreground'
-            }`}
-          >
-            <span>{lang.flag}</span>
-            <span>{lang.name}</span>
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      ))}
+    </div>
   )
 }
 
@@ -304,6 +143,24 @@ function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const { setIsCartOpen, cartCount } = useCart()
+  const location = useLocation()
+  const [currentUser, setCurrentUser] = useState(null)
+
+  const [megaCategories, setMegaCategories] = useState([])
+  const [megaBrands, setMegaBrands] = useState([])
+
+  useEffect(() => {
+    const userStr = localStorage.getItem('currentUser')
+    if (userStr) {
+      try {
+        setCurrentUser(JSON.parse(userStr))
+      } catch (e) {
+        setCurrentUser(null)
+      }
+    } else {
+      setCurrentUser(null)
+    }
+  }, [location])
 
   // Search States
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -328,17 +185,98 @@ function Navbar() {
 
   // Categories Mega Menu States
   const [isMegaOpen, setIsMegaOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('featured')
+  const [activeTab, setActiveTab] = useState('')
   const megaTimeoutRef = useRef(null)
   const rightPaneRef = useRef(null)
   const isScrollingRef = useRef(false)
 
   // Brands Mega Menu States
   const [isBrandsMegaOpen, setIsBrandsMegaOpen] = useState(false)
-  const [activeBrandsTab, setActiveBrandsTab] = useState('grid-automation')
+  const [activeBrandsTab, setActiveBrandsTab] = useState('')
   const brandsTimeoutRef = useRef(null)
   const rightBrandsPaneRef = useRef(null)
   const isBrandsScrollingRef = useRef(false)
+
+  // Fetch Categories, Brands and Products to build mega menus dynamically
+  useEffect(() => {
+    const fetchMegaMenuData = async () => {
+      try {
+        const [products, categories, brands] = await Promise.all([
+          api.getProducts(),
+          api.getCategories(),
+          api.getBrands()
+        ])
+
+        // Categories Map
+        const categoriesMap = {}
+        categories.forEach(cat => {
+          const name = cat.name || ''
+          categoriesMap[name.toLowerCase()] = {
+            id: name.toLowerCase(),
+            name: name.charAt(0).toUpperCase() + name.slice(1),
+            icon: name === 'distribution' ? '⚡' : name === 'smart' ? '📱' : name === 'cabling' ? '🔌' : name === 'renewable' ? '☀️' : '⭐',
+            items: []
+          }
+        })
+
+        // Populate Category items
+        products.forEach(p => {
+          const catName = typeof p.category === 'object' && p.category !== null ? p.category.name : p.category
+          const catKey = String(catName || '').toLowerCase()
+          if (categoriesMap[catKey]) {
+            categoriesMap[catKey].items.push({
+              id: p.id,
+              name: p.name,
+              image: p.image || p.images?.[0] || '/p1.jpg',
+              tag: p.tag === 'BEST_SELLER' ? 'hot' : p.tag === 'NEW' ? 'new' : undefined
+            })
+          }
+        })
+
+        // Brands Map
+        const brandsMap = {}
+        brands.forEach(brand => {
+          const name = brand.name || ''
+          brandsMap[name.toLowerCase()] = {
+            id: name.toLowerCase(),
+            name: name,
+            icon: name.toUpperCase() === 'SCHNEIDER' ? '🟢' : name.toUpperCase() === 'LEGRAND' ? '🔴' : name.toUpperCase() === 'SIEMENS' ? '🔵' : name.toUpperCase() === 'ABB' ? '🟠' : name.toUpperCase() === 'PHILIPS' ? '💡' : '⚡',
+            items: []
+          }
+        })
+
+        // Populate Brand items
+        products.forEach(p => {
+          const brandName = typeof p.brand === 'object' && p.brand !== null ? p.brand.name : p.brand
+          const brandKey = String(brandName || '').toLowerCase()
+          if (brandsMap[brandKey]) {
+            brandsMap[brandKey].items.push({
+              id: p.id,
+              name: p.name,
+              image: p.image || p.images?.[0] || '/p1.jpg',
+              tag: p.tag === 'BEST_SELLER' ? 'hot' : p.tag === 'NEW' ? 'new' : undefined
+            })
+          }
+        })
+
+        const finalCats = Object.values(categoriesMap).filter(c => c.items.length > 0)
+        const finalBrands = Object.values(brandsMap).filter(b => b.items.length > 0)
+
+        setMegaCategories(finalCats)
+        setMegaBrands(finalBrands)
+
+        if (finalCats.length > 0) {
+          setActiveTab(finalCats[0].id)
+        }
+        if (finalBrands.length > 0) {
+          setActiveBrandsTab(finalBrands[0].id)
+        }
+      } catch (err) {
+        console.error('Error fetching mega menu dynamic data:', err)
+      }
+    }
+    fetchMegaMenuData()
+  }, [])
 
   // Mobile Accordion States
   const [mobileCategoriesOpen, setMobileCategoriesOpen] = useState(false)
@@ -510,17 +448,13 @@ function Navbar() {
             <div className="flex items-center gap-3">
               <button 
                 onClick={() => setIsSearchOpen(!isSearchOpen)}
-                className={`p-2 transition-colors cursor-pointer rounded-full hover:bg-foreground/5 ${
-                  isSearchOpen ? 'text-kurima-orange' : 'text-foreground/70 hover:text-kurima-orange'
-                }`}
+                className="p-2.5 transition-all cursor-pointer rounded-full border hover:scale-105 hover:shadow-lg bg-kurima-orange text-black border-kurima-orange shadow-lg shadow-kurima-orange/20"
                 aria-label="Search Catalog"
               >
                 <Search className="w-5 h-5" />
               </button>
-              <LanguageSwitcher />
-              <ThemeToggler />
               <Link 
-                to={localStorage.getItem('currentUser') ? "/profile" : "/login"}
+                to={currentUser ? "/profile" : "/login"}
                 className="p-2 text-foreground/70 hover:text-kurima-orange transition-colors cursor-pointer rounded-full hover:bg-foreground/5"
                 aria-label="User Profile"
               >
@@ -676,7 +610,7 @@ function Navbar() {
                             key={idx}
                             onClick={() => {
                               setIsMegaOpen(false)
-                              navigate('/product/1')
+                              navigate(`/product/${item.id}`)
                             }}
                             className="flex flex-col items-center group cursor-pointer"
                           >
@@ -771,33 +705,37 @@ function Navbar() {
                         <span>{cat.name}</span>
                       </h3>
                       
-                      <div className="grid grid-cols-4 gap-8">
+                      <div className="grid grid-cols-5 gap-8">
                         {cat.items.map((item, idx) => (
                           <div
                             key={idx}
                             onClick={() => {
                               setIsBrandsMegaOpen(false)
-                              navigate('/product/1')
+                              navigate(`/product/${item.id}`)
                             }}
                             className="flex flex-col items-center group cursor-pointer"
                           >
                             <div className="relative w-24 h-24 rounded-full overflow-hidden bg-foreground/5 border border-border/80 flex items-center justify-center mb-4 transition-all duration-300 group-hover:scale-105 group-hover:border-kurima-orange group-hover:shadow-lg group-hover:shadow-kurima-orange/10">
-                              <div className="w-full h-full flex flex-col items-center justify-center p-3 text-center">
-                                <span className="text-sm font-black text-foreground tracking-wider group-hover:text-kurima-orange transition-colors">
-                                  {item.name}
-                                </span>
-                                <span className="text-[9px] text-foreground/45 font-semibold tracking-tight mt-1">
-                                  {item.origin}
-                                </span>
-                              </div>
+                              <img
+                                src={item.image}
+                                alt={item.name}
+                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              />
                               {item.tag && (
                                 <span
-                                  className={`absolute -top-1 -right-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-full shadow-md bg-kurima-orange text-black`}
+                                  className={`absolute -top-1 -right-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-md ${
+                                    item.tag === 'hot'
+                                      ? 'bg-red-500 text-white animate-pulse'
+                                      : 'bg-kurima-orange text-black font-extrabold'
+                                  }`}
                                 >
-                                  {item.tag}
+                                  {item.tag === 'hot' ? '🔥' : '✨'}
                                 </span>
                               )}
                             </div>
+                            <span className="text-xs font-bold text-foreground/80 group-hover:text-kurima-orange transition-colors uppercase tracking-wider text-center max-w-[120px] line-clamp-2">
+                              {item.name}
+                            </span>
                           </div>
                         ))}
                       </div>
@@ -827,9 +765,12 @@ function Navbar() {
                   alt="ElectroHub"
                   className="w-36 object-contain filter dark:brightness-110"
                 />
-                <button onClick={() => setMobileOpen(false)} className="p-2 text-foreground">
-                  <X className="w-6 h-6" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <ThemeToggler />
+                  <button onClick={() => setMobileOpen(false)} className="p-2 text-foreground">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
 
               {/* Mobile Nested Accordion Links */}
@@ -900,15 +841,12 @@ function Navbar() {
                                             key={idx}
                                             onClick={() => {
                                               setMobileOpen(false)
-                                              navigate('/product/1')
+                                              navigate(`/product/${sub.id}`)
                                             }}
                                             className="flex flex-col items-start gap-1 p-3 rounded-xl bg-foreground/[0.03] active:bg-foreground/[0.07] border border-border/40 cursor-pointer transition-all duration-200"
                                           >
                                             <span className="text-xs font-bold text-foreground/90 uppercase tracking-wider">
                                               {sub.name}
-                                            </span>
-                                            <span className="text-[9px] text-foreground/45 uppercase tracking-wider font-semibold">
-                                              {sub.origin}
                                             </span>
                                           </div>
                                         ))}
@@ -989,7 +927,7 @@ function Navbar() {
                                             key={idx}
                                             onClick={() => {
                                               setMobileOpen(false)
-                                              navigate('/product/1')
+                                              navigate(`/product/${sub.id}`)
                                             }}
                                             className="flex items-center gap-2.5 p-2 rounded-xl bg-foreground/[0.03] active:bg-foreground/[0.07] border border-border/40 cursor-pointer transition-all duration-200"
                                           >
@@ -1094,8 +1032,8 @@ function HeroSection() {
             className="w-full h-full object-cover"
           />
           {/* Gradient overlays */}
-          <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/50 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background/70 via-transparent to-background/30" />
+          <div className="absolute inset-0 bg-gradient-to-r dark:from-background/80 dark:via-background/50 from-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t dark:from-background/70 dark:via-transparent dark:to-background/30 from-transparent to-transparent" />
         </motion.div>
       </AnimatePresence>
 
@@ -1187,13 +1125,32 @@ function HeroSection() {
 
 function MarqueeBanner() {
   const { t } = useTranslation()
+
+  const marqueeText = useMemo(() => {
+    const raw = t('hero.marquee')
+    const stored = localStorage.getItem('admin_settings')
+    let thresh = 15000
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored)
+        if (parsed.minFreeDelivery !== undefined) {
+          thresh = Number(parsed.minFreeDelivery)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+    const formattedThresh = thresh.toLocaleString()
+    return raw.replace(/15[,.\s]?000/g, formattedThresh)
+  }, [t])
+
   return (
     <div className="bg-kurima-orange py-3 overflow-hidden">
       <div className="flex animate-[scroll_20s_linear_infinite]">
         <div className="flex shrink-0 items-center">
           {Array.from({ length: 4 }).map((_, i) => (
             <span key={i} className="text-white font-bold text-sm tracking-widest whitespace-nowrap uppercase">
-              {t('hero.marquee')}
+              {marqueeText}
             </span>
           ))}
         </div>
@@ -1288,17 +1245,24 @@ function ProductCard({ product, index }) {
       <div className="flex-1 flex flex-col justify-between p-5 bg-foreground/[0.015]">
         <div>
           <p className="text-xs text-kurima-muted font-medium tracking-wider uppercase mb-1.5">
-            {t(product.category)}
+            {typeof product.category === 'object' && product.category !== null 
+              ? t(product.category.name || '') 
+              : t(product.category || '')}
           </p>
           <h3 className="font-bold text-foreground text-base mb-2 group-hover:text-kurima-orange transition-colors line-clamp-2">
             {product.name}
           </h3>
         </div>
-        <div className="flex items-center gap-2 mt-2">
-          <span className="text-kurima-orange font-black text-lg">{product.price} DA</span>
-          {product.originalPrice && (
-            <span className="text-foreground/45 line-through text-xs font-semibold">{product.originalPrice} DA</span>
-          )}
+        <div className="mt-2">
+          <p className="text-[10px] text-kurima-muted font-bold mb-0.5">
+            Ref: {product.ref || `REF-P${product.id}`}
+          </p>
+          <div className="flex items-center gap-2 mt-1">
+            <span className="text-black dark:text-kurima-orange font-black text-lg">{product.price} DA</span>
+            {product.originalPrice && (
+              <span className="text-foreground/45 line-through text-xs font-semibold">{product.originalPrice} DA</span>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -1306,6 +1270,24 @@ function ProductCard({ product, index }) {
 }
 
 function BrandsSection() {
+  const [dbBrands, setDbBrands] = useState([])
+
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        const data = await api.getBrands()
+        if (data && data.length > 0) {
+          setDbBrands(data.map(b => b.name))
+        }
+      } catch (err) {
+        console.error('Error fetching brands for loop:', err)
+      }
+    }
+    fetchBrands()
+  }, [])
+
+  const brandsList = dbBrands.length > 0 ? dbBrands : brands
+
   return (
     <section className="py-12 bg-kurima-black  overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
@@ -1318,7 +1300,7 @@ function BrandsSection() {
         </div>
       </div>
       <LogoLoop
-        logos={brands.map(name => ({ node: name }))}
+        logos={brandsList.map(name => ({ node: name }))}
         speed={40}
         gap={80}
         logoHeight={40}
@@ -1335,6 +1317,28 @@ function BrandsSection() {
 
 function FeaturedProducts() {
   const { t } = useTranslation()
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchFeatured = async () => {
+      try {
+        const data = await api.getProducts({ limit: 4 })
+        if (data && data.length > 0) {
+          setProducts(data)
+        } else {
+          setProducts([])
+        }
+      } catch (err) {
+        console.error('Failed to fetch featured products from backend:', err)
+        setProducts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchFeatured()
+  }, [])
+
   return (
     <section id="new" className="py-20 sm:py-28">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1357,14 +1361,17 @@ function FeaturedProducts() {
           <Button
             variant="outline"
             className="border-white/10 text-white hover:border-kurima-orange hover:text-kurima-orange rounded-full px-6 self-start sm:self-auto"
+            asChild
           >
-            View All <ArrowRight className="ml-2 w-4 h-4" />
+            <Link to="/shop">
+              View All <ArrowRight className="ml-2 w-4 h-4" />
+            </Link>
           </Button>
         </div>
 
         {/* Products Grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {featuredProducts.map((product, i) => (
+          {products.map((product, i) => (
             <ProductCard key={product.id} product={product} index={i} />
           ))}
         </div>
@@ -1375,6 +1382,32 @@ function FeaturedProducts() {
 
 function CollectionsSection() {
   const { t } = useTranslation()
+  const [gammes, setGammes] = useState([])
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const loadGammes = async () => {
+      try {
+        const data = await api.getGammes()
+        setGammes(data)
+      } catch (err) {
+        console.error('Error loading gammes:', err)
+      }
+    }
+    loadGammes()
+  }, [])
+
+  if (gammes.length === 0) return null
+
+  // Fallback image map for gammes
+  const getGammeImage = (name) => {
+    const normalized = name.toLowerCase()
+    if (normalized.includes('pro')) return '/p1.jpg'
+    if (normalized.includes('classic')) return '/p2.jpg'
+    if (normalized.includes('elite')) return '/p3.jpg'
+    return '/p4.jpg'
+  }
+
   return (
     <section id="collections" className="py-20 sm:py-28 bg-kurima-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -1394,25 +1427,28 @@ function CollectionsSection() {
         </div>
 
         <MotionCarousel
-          items={collections}
+          items={gammes}
           options={{ loop: true, align: 'center' }}
           renderSlide={(col) => (
             <motion.div
+              onClick={() => navigate(`/shop?gamme=${col.name}`)}
               className="group relative h-full w-full rounded-3xl overflow-hidden cursor-pointer"
             >
               <img
-                src={col.image}
-                alt={t(col.name)}
+                src={col.image || getGammeImage(col.name)}
+                alt={col.name}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/20 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t dark:from-background/80 dark:via-background/20 from-transparent to-transparent" />
               <div className="absolute inset-0 bg-kurima-orange/0 group-hover:bg-kurima-orange/10 transition-colors duration-500" />
               <div className="absolute bottom-8 left-8 right-8 text-left rtl:text-right" dir="auto">
                 <Badge className="bg-kurima-orange text-black font-semibold mb-3">
-                  {col.items} {t('product.pieces')}
+                  {col.brand?.name || 'Exclusive'}
                 </Badge>
-                <h3 className="text-2xl sm:text-3xl font-black text-foreground mb-2">{t(col.name)}</h3>
-                <p className="text-foreground/70 text-sm sm:text-base mb-4 max-w-sm">{t(col.description)}</p>
+                <h3 className="text-2xl sm:text-3xl font-black text-foreground mb-2">{col.name} Series</h3>
+                <p className="text-foreground/70 text-sm sm:text-base mb-4 max-w-sm">
+                  Explore high-performance {col.category?.name || 'electrical'} equipment from {col.brand?.name || 'leading brand'}.
+                </p>
                 <div className="flex items-center gap-2 text-kurima-orange font-semibold text-sm group-hover:gap-3 transition-all">
                   {t('product.shopCollection')} <ArrowRight className="w-4 h-4" />
                 </div>
@@ -1633,27 +1669,35 @@ export default function App() {
               <BrandsSection />
               <CollectionsSection />
               <TestimonialsSection />
-              <StoreLocator />
             </main>
           } />
           <Route path="/product/:id" element={<ProductPage />} />
           <Route path="/shop" element={<ShopPage />} />
+          <Route path="/compare" element={<ComparePage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/login" element={<AuthPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
           
-          {/* Modularized Admin Control Panel Nested Routes */}
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Navigate to="/admin/dashboard" replace />} />
-            <Route path="dashboard" element={<AdminDashboard />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="clients" element={<AdminClients />} />
-            <Route path="settings" element={<AdminSettings />} />
+          {/* Protected Client Routes */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/profile" element={<ProfilePage />} />
+          </Route>
+
+          {/* Protected Admin Routes */}
+          <Route element={<ProtectedRoute requireAdmin={true} />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="clients" element={<AdminClients />} />
+              <Route path="settings" element={<AdminSettings />} />
+              <Route path="shipping" element={<AdminShippingRates />} />
+            </Route>
           </Route>
         </Routes>
         {!hideNavbarAndFooter && <Footer />}
         <Cart />
+        {!hideNavbarAndFooter && <FloatingLanguageSwitcher />}
       </div>
     </CartProvider>
   )

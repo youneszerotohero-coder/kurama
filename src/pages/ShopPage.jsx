@@ -21,150 +21,7 @@ import { useCart } from '@/context/CartContext'
 import { useNavigate } from 'react-router-dom'
 import ProductCard from '@/components/ProductCard'
 
-// Mock products database for a premium shop experience
-const SHOP_PRODUCTS = [
-  {
-    id: 1,
-    name: 'Smart Circuit Breaker Pro',
-    price: 38500,
-    originalPrice: 45000,
-    image: '/p1.jpg',
-    tag: 'tags.bestSeller',
-    category: 'distribution',
-    brand: 'SIEMENS',
-    inStock: true,
-    rating: 4.9,
-    description: 'Next-generation intelligent breaker with instant load monitoring and mobile control.',
-    sizes: ['16A', '32A', '63A', '100A']
-  },
-  {
-    id: 2,
-    name: 'Intelligent Energy Monitor',
-    price: 18900,
-    image: '/p2.jpg',
-    tag: 'tags.new',
-    category: 'smart',
-    brand: 'SCHNEIDER',
-    inStock: true,
-    rating: 4.8,
-    description: 'Hook directly to your distribution board for AI-powered load monitoring and suggestions.',
-    sizes: ['Single-Phase', 'Three-Phase']
-  },
-  {
-    id: 3,
-    name: 'Heavy Duty Copper Cable',
-    price: 14500,
-    image: '/p3.jpg',
-    tag: 'tags.trending',
-    category: 'cabling',
-    brand: 'LEGRAND',
-    inStock: true,
-    rating: 4.7,
-    description: 'Ultra-pure insulated copper wires built to handle extreme thermal currents.',
-    sizes: ['4mm²', '6mm²', '10mm²', '16mm²']
-  },
-  {
-    id: 4,
-    name: 'Premium Double Wall Switch',
-    price: 9500,
-    originalPrice: 12000,
-    image: '/p4.jpg',
-    tag: 'tags.sale',
-    category: 'cabling',
-    brand: 'LEGRAND',
-    inStock: true,
-    rating: 4.6,
-    description: 'Glass-touch sensory panels that match elegant modern residential architecture.',
-    sizes: ['Standard 86mm', 'Double 146mm']
-  },
-  {
-    id: 5,
-    name: 'Solar Panel 450W Mono',
-    price: 42000,
-    image: '/bg1.jpg',
-    tag: 'tags.trending',
-    category: 'renewable',
-    brand: 'SIEMENS',
-    inStock: true,
-    rating: 4.9,
-    description: 'Monocrystalline high-efficiency photovoltaic panels with heavy weathering tolerance.',
-    sizes: ['Standard']
-  },
-  {
-    id: 6,
-    name: 'Lithium Battery Storage 5kWh',
-    price: 245000,
-    originalPrice: 280000,
-    image: '/bg2.jpg',
-    tag: 'tags.bestSeller',
-    category: 'renewable',
-    brand: 'ABB',
-    inStock: true,
-    rating: 5.0,
-    description: 'High discharge life smart lithium iron phosphate home battery cells.',
-    sizes: ['5kWh Cabinet', '10kWh Cabinet']
-  },
-  {
-    id: 7,
-    name: 'Smart Wi-Fi Meter Pro',
-    price: 12800,
-    image: '/product-1.png',
-    tag: 'tags.new',
-    category: 'smart',
-    brand: 'SCHNEIDER',
-    inStock: false,
-    rating: 4.5,
-    description: 'Intelligent wireless utility tracker syncing real-time voltage stats over standard MQTT.',
-    sizes: ['Single-Phase']
-  },
-  {
-    id: 8,
-    name: 'Industrial Contactor 40A',
-    price: 15400,
-    image: '/product-2.png',
-    category: 'distribution',
-    brand: 'ABB',
-    inStock: true,
-    rating: 4.7,
-    description: 'Heavy duty modular power contactor for commercial pump systems and mechanical loads.',
-    sizes: ['220V Coil', '380V Coil']
-  },
-  {
-    id: 9,
-    name: 'Surge Protection Device',
-    price: 8900,
-    image: '/product-3.png',
-    tag: 'tags.sale',
-    category: 'distribution',
-    brand: 'EATON',
-    inStock: true,
-    rating: 4.8,
-    description: 'Class II transient voltage suppressor safeguarding complex server arrays.',
-    sizes: ['20kA', '40kA']
-  },
-  {
-    id: 10,
-    name: 'Solar Grid-Tie Inverter 5kW',
-    price: 189000,
-    image: '/product-4.png',
-    category: 'renewable',
-    brand: 'PHILIPS',
-    inStock: false,
-    rating: 4.9,
-    description: 'State-of-the-art dual-MPPT smart inverter feed monitoring.',
-    sizes: ['5kW Wall-Mount']
-  }
-]
-
-const CATEGORIES = [
-  { id: 'all', label: 'All Categories' },
-  { id: 'distribution', label: 'Power Distribution' },
-  { id: 'smart', label: 'Smart Grid & Automation' },
-  { id: 'cabling', label: 'Industrial Cabling' },
-  { id: 'renewable', label: 'Renewable Energy' }
-]
-
-const BRANDS = ['All Brands', 'SIEMENS', 'SCHNEIDER', 'LEGRAND', 'ABB', 'EATON', 'PHILIPS']
+import api from '@/lib/api'
 
 const SORT_OPTIONS = [
   { id: 'featured', label: 'Featured & Best Match' },
@@ -178,14 +35,50 @@ export default function ShopPage() {
   const navigate = useNavigate()
   const { addToCart } = useCart()
 
-  // Dynamic Localized Lists
-  const categoriesList = useMemo(() => [
-    { id: 'all', label: t('shop.allCategories', 'All Categories') },
-    { id: 'distribution', label: t('shop.distribution', 'Power Distribution') },
-    { id: 'smart', label: t('shop.smart', 'Smart Grid & Automation') },
-    { id: 'cabling', label: t('shop.cabling', 'Industrial Cabling') },
-    { id: 'renewable', label: t('shop.renewable', 'Renewable Energy') }
-  ], [t])
+  // Dynamic filter options state
+  const [dbCategories, setDbCategories] = useState([])
+  const [dbBrands, setDbBrands] = useState([])
+  const [dbGammes, setDbGammes] = useState([])
+
+  // State Management
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('all')
+  const [selectedBrand, setSelectedBrand] = useState('All Brands')
+  const [selectedGamme, setSelectedGamme] = useState('All Gammes')
+  const [maxPrice, setMaxPrice] = useState(300000)
+  const [onlyInStock, setOnlyInStock] = useState(false)
+  const [sortBy, setSortBy] = useState('featured')
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+
+  // Live Products State
+  const [products, setProducts] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  // Localized Lists
+  const categoriesList = useMemo(() => {
+    const list = [{ id: 'all', label: t('shop.allCategories', 'All Categories') }]
+    dbCategories.forEach(cat => {
+      const name = typeof cat === 'string' ? cat : (cat?.name || '')
+      const id = typeof cat === 'string' ? cat : (cat?.name || '')
+      if (name) {
+        list.push({
+          id: id,
+          label: t(`shop.${name}`, name.charAt(0).toUpperCase() + name.slice(1))
+        })
+      }
+    })
+    return list
+  }, [dbCategories, t])
+
+  const brandsList = useMemo(() => {
+    const names = dbBrands.map(b => typeof b === 'string' ? b : (b?.name || ''))
+    return ['All Brands', ...names].filter(Boolean)
+  }, [dbBrands])
+
+  const gammesList = useMemo(() => {
+    const names = dbGammes.map(g => typeof g === 'string' ? g : (g?.name || ''))
+    return names.filter(Boolean)
+  }, [dbGammes])
 
   const sortOptionsList = useMemo(() => [
     { id: 'featured', label: t('shop.sortFeatured', 'Featured & Best Match') },
@@ -194,55 +87,76 @@ export default function ShopPage() {
     { id: 'rating', label: t('shop.sortRating', 'Customer Rating') }
   ], [t])
 
-  // State Management
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [selectedBrand, setSelectedBrand] = useState('All Brands')
-  const [maxPrice, setMaxPrice] = useState(300000)
-  const [onlyInStock, setOnlyInStock] = useState(false)
-  const [sortBy, setSortBy] = useState('featured')
-  const [likedProducts, setLikedProducts] = useState([])
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
-
-  // Scroll to top on mount
+  // Scroll to top and fetch dynamic lists
   useEffect(() => {
     window.scrollTo(0, 0)
+
+    const fetchFilters = async () => {
+      try {
+        const [cats, brs, gms] = await Promise.all([
+          api.getCategories(),
+          api.getBrands(),
+          api.getGammes()
+        ])
+        if (cats && cats.length) setDbCategories(cats)
+        if (brs && brs.length) setDbBrands(brs)
+        if (gms && gms.length) setDbGammes(gms)
+      } catch (err) {
+        console.error('Error fetching filter values:', err)
+      }
+    }
+    fetchFilters()
   }, [])
 
-  // Like toggle
-  const toggleLike = (productId, e) => {
-    e.stopPropagation()
-    setLikedProducts(prev => 
-      prev.includes(productId) 
-        ? prev.filter(id => id !== productId)
-        : [...prev, productId]
-    )
-  }
+  // Fetch products from backend whenever filters or search query changes
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true)
+      try {
+        const queryParams = {
+          search: searchQuery || undefined,
+          category: selectedCategory === 'all' ? undefined : selectedCategory,
+          brand: selectedBrand === 'All Brands' ? undefined : selectedBrand,
+          gamme: selectedGamme === 'All Gammes' ? undefined : selectedGamme,
+          maxPrice: maxPrice,
+          inStock: onlyInStock ? true : undefined,
+          sort: sortBy
+        }
+        const data = await api.getProducts(queryParams)
+        // Convert prices to numbers safely
+        const mappedData = data.map(p => ({
+          ...p,
+          price: Number(p.price),
+          originalPrice: p.originalPrice ? Number(p.originalPrice) : null
+        }))
+        setProducts(mappedData)
+      } catch (err) {
+        console.error('Error fetching products:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
 
-  // Filtered & Sorted Products
-  const filteredProducts = useMemo(() => {
-    return SHOP_PRODUCTS.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                            product.description.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesCategory = selectedCategory === 'all' || product.category === selectedCategory
-      const matchesBrand = selectedBrand === 'All Brands' || product.brand === selectedBrand
-      const matchesPrice = product.price <= maxPrice
-      const matchesStock = !onlyInStock || product.inStock
+    const delayDebounce = setTimeout(() => {
+      fetchProducts()
+    }, 250) // debounce search inputs slightly
 
-      return matchesSearch && matchesCategory && matchesBrand && matchesPrice && matchesStock
-    }).sort((a, b) => {
-      if (sortBy === 'price-asc') return a.price - b.price
-      if (sortBy === 'price-desc') return b.price - a.price
-      if (sortBy === 'rating') return b.rating - a.rating
-      return 0 // default sequence
-    })
-  }, [searchQuery, selectedCategory, selectedBrand, maxPrice, onlyInStock, sortBy])
+    return () => clearTimeout(delayDebounce)
+  }, [searchQuery, selectedCategory, selectedBrand, selectedGamme, maxPrice, onlyInStock, sortBy])
+
+  // Reset selected gamme if the selected brand changes and the current gamme is not in the filtered gammes list
+  useEffect(() => {
+    if (selectedGamme !== 'All Gammes' && !gammesList.includes(selectedGamme)) {
+      setSelectedGamme('All Gammes')
+    }
+  }, [selectedBrand, gammesList, selectedGamme])
 
   // Clear filters helper
   const handleResetFilters = () => {
     setSearchQuery('')
     setSelectedCategory('all')
     setSelectedBrand('All Brands')
+    setSelectedGamme('All Gammes')
     setMaxPrice(300000)
     setOnlyInStock(false)
     setSortBy('featured')
@@ -296,9 +210,9 @@ export default function ShopPage() {
             {/* Mobile Filter Button */}
             <Button
               onClick={() => setIsMobileFilterOpen(true)}
-              className="lg:hidden bg-background border border-border text-foreground hover:bg-foreground/5 px-4 rounded-xl flex items-center gap-2"
+              className="lg:hidden bg-kurima-orange text-black hover:bg-kurima-orange-light px-5 py-3 h-auto rounded-xl flex items-center gap-2 font-black shadow-lg shadow-kurima-orange/20 border-0 transition-all duration-300 hover:scale-105 active:scale-95"
             >
-              <SlidersHorizontal className="w-4 h-4" />
+              <SlidersHorizontal className="w-4 h-4 text-black font-black" />
               {t('shop.filters', 'Filters')}
             </Button>
           </div>
@@ -354,9 +268,35 @@ export default function ShopPage() {
                   onChange={(e) => setSelectedBrand(e.target.value)}
                   className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
                 >
-                  {BRANDS.map(brand => (
+                  {brandsList.map(brand => (
                     <option key={brand} value={brand} className="bg-background text-foreground">
                       {brand === 'All Brands' ? t('shop.allManufacturers', 'All Manufacturers') : brand}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
+                  <ChevronDown className="w-4 h-4" />
+                </div>
+              </div>
+            </div>
+
+            <Separator className="bg-foreground/10 my-6" />
+
+            {/* Gamme Select */}
+            <div className="mb-6">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectGamme', 'Select Range')}</h4>
+              <div className="relative w-full">
+                <select
+                  value={selectedGamme}
+                  onChange={(e) => setSelectedGamme(e.target.value)}
+                  className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
+                >
+                  <option value="All Gammes" className="bg-background text-foreground">
+                    {t('shop.allGammes', 'All Ranges')}
+                  </option>
+                  {gammesList.map(gamme => (
+                    <option key={gamme} value={gamme} className="bg-background text-foreground">
+                      {gamme}
                     </option>
                   ))}
                 </select>
@@ -372,7 +312,7 @@ export default function ShopPage() {
             <div className="mb-6">
               <div className="flex justify-between items-center mb-3">
                 <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.maxBudget', 'Max Budget')}</h4>
-                <span className="text-xs font-black text-kurima-orange">{maxPrice.toLocaleString()} DA</span>
+                <span className="text-xs font-black text-black dark:text-kurima-orange">{maxPrice.toLocaleString()} DA</span>
               </div>
               <input
                 type="range"
@@ -413,7 +353,20 @@ export default function ShopPage() {
           {/* Product Grid Area */}
           <div className="flex-1">
             <AnimatePresence mode="wait">
-              {filteredProducts.length === 0 ? (
+              {loading ? (
+                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  {[...Array(6)].map((_, i) => (
+                    <div key={i} className="animate-pulse bg-foreground/[0.03] border border-border/80 rounded-2xl h-[360px] flex flex-col justify-between p-5">
+                      <div className="h-[180px] bg-foreground/5 rounded-xl mb-4" />
+                      <div className="space-y-3 flex-1 flex flex-col justify-end">
+                        <div className="h-3 bg-foreground/5 rounded w-1/4" />
+                        <div className="h-5 bg-foreground/5 rounded w-3/4" />
+                        <div className="h-3 bg-foreground/5 rounded w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : products.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -447,7 +400,7 @@ export default function ShopPage() {
                   }}
                   className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
                 >
-                  {filteredProducts.map((product, i) => (
+                  {products.map((product, i) => (
                     <ProductCard key={product.id} product={product} index={i} />
                   ))}
                 </motion.div>
@@ -526,9 +479,38 @@ export default function ShopPage() {
                     }}
                     className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
                   >
-                    {BRANDS.map(brand => (
+                    {brandsList.map(brand => (
                       <option key={brand} value={brand} className="bg-background text-foreground">
                         {brand === 'All Brands' ? t('shop.allManufacturers', 'All Manufacturers') : brand}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
+                    <ChevronDown className="w-4 h-4" />
+                  </div>
+                </div>
+              </div>
+
+              <Separator className="bg-white/5 my-6" />
+
+              {/* Mobile Gammes Select */}
+              <div className="mb-6">
+                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectGamme', 'Ranges')}</h4>
+                <div className="relative w-full">
+                  <select
+                    value={selectedGamme}
+                    onChange={(e) => {
+                      setSelectedGamme(e.target.value)
+                      setIsMobileFilterOpen(false)
+                    }}
+                    className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
+                  >
+                    <option value="All Gammes" className="bg-background text-foreground">
+                      {t('shop.allGammes', 'All Ranges')}
+                    </option>
+                    {gammesList.map(gamme => (
+                      <option key={gamme} value={gamme} className="bg-background text-foreground">
+                        {gamme}
                       </option>
                     ))}
                   </select>
@@ -544,7 +526,7 @@ export default function ShopPage() {
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.maxBudget', 'Max Budget')}</h4>
-                  <span className="text-xs font-black text-kurima-orange">{maxPrice.toLocaleString()} DA</span>
+                  <span className="text-xs font-black text-black dark:text-kurima-orange">{maxPrice.toLocaleString()} DA</span>
                 </div>
                 <input
                   type="range"

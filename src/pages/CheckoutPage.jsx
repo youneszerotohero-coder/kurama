@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useTranslation } from 'react-i18next'
 import { useCart } from '@/context/CartContext'
+import api from '@/lib/api'
 
 export default function CheckoutPage() {
   const { t } = useTranslation()
@@ -65,47 +66,101 @@ export default function CheckoutPage() {
     name: false,
     phone: false,
     wilaya: false,
-    commune: false
+    commune: false,
+    submit: null
   })
   const [isOrderSuccess, setIsOrderSuccess] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [minFreeDelivery, setMinFreeDelivery] = useState(15000)
 
-  // Scroll to top on mount
+  const [territories, setTerritories] = useState([])
+  const [shippingType, setShippingType] = useState('home') // 'home' or 'desk'
+
+  // Fetch settings, territories & auto-fill profile details
   useEffect(() => {
     window.scrollTo(0, 0)
+
+    const loadSettingsAndProfile = async () => {
+      try {
+        const [settings, territoriesData] = await Promise.all([
+          api.getPublicSettings().catch(() => ({})),
+          api.getTerritories().catch(() => [])
+        ])
+
+        if (settings && settings.minFreeDelivery !== undefined) {
+          setMinFreeDelivery(Number(settings.minFreeDelivery));
+        }
+
+        const rawTerritories = territoriesData.data || territoriesData || []
+        setTerritories(rawTerritories)
+      } catch (err) {
+        console.error('Failed to fetch public settings or territories:', err);
+      }
+
+      // Pre-fill form from logged-in user
+      const storedUser = localStorage.getItem('currentUser')
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser)
+          setOrderForm({
+            name: u.name || u.fullName || '',
+            phone: u.phone || '',
+            wilaya: u.wilaya || '',
+            commune: u.commune || ''
+          })
+        } catch (e) {
+          console.error(e)
+        }
+      }
+    };
+
+    loadSettingsAndProfile();
   }, [])
 
-  const WILAYAS = [
-    'Algiers (16)', 'Oran (31)', 'Constantine (25)', 'Blida (09)', 'Sétif (19)', 
-    'Annaba (23)', 'Tizi Ouzou (15)', 'Bejaia (06)', 'Tlemcen (13)', 'Ghardaia (47)', 'Chlef (02)'
-  ]
+  const SHIPPING_THRESHOLD = minFreeDelivery;
 
-  const SHIPPING_THRESHOLD = 15000
+  // Find active shipping rate matching the selected wilaya
+  const selectedWilayaData = territories.find(t => {
+    const optionName = `${t.name} (${t.code})`;
+    // Match either the formatted optionName or the raw wilaya name containing code or name
+    return optionName === orderForm.wilaya || 
+      orderForm.wilaya.toLowerCase().includes(t.name.toLowerCase()) ||
+      (orderForm.wilaya.includes(`(${t.code})`))
+  });
 
-  const getShippingFee = (wilayaName) => {
+  const getShippingFee = (wilayaName, type = shippingType) => {
     if (cartTotal >= SHIPPING_THRESHOLD) return 0
     if (!wilayaName) return 600
-    if (wilayaName.includes('Algiers')) return 400
-    if (wilayaName.includes('Blida')) return 500
-    if (wilayaName.includes('Oran') || wilayaName.includes('Constantine')) return 700
-    return 900
+    if (selectedWilayaData) {
+      if (type === 'desk') {
+        return Number(selectedWilayaData.desk_price)
+      }
+      return Number(selectedWilayaData.home_price)
+    }
+    // Fallback static pricing
+    if (wilayaName.includes('Algiers') || wilayaName.includes('Alger') || wilayaName.includes('16')) return type === 'desk' ? 250 : 400
+    if (wilayaName.includes('Blida') || wilayaName.includes('09')) return type === 'desk' ? 350 : 500
+    if (wilayaName.includes('Oran') || wilayaName.includes('Constantine')) return type === 'desk' ? 450 : 700
+    return type === 'desk' ? 600 : 900
   }
 
   const shippingCost = getShippingFee(orderForm.wilaya)
   const totalCost = cartTotal + shippingCost
 
-  const handleConfirmOrder = (e) => {
+  const handleConfirmOrder = async (e) => {
     e.preventDefault()
     
     const errors = {
       name: !orderForm.name.trim(),
       phone: !orderForm.phone.trim(),
       wilaya: !orderForm.wilaya.trim(),
-      commune: !orderForm.commune.trim()
+      commune: !orderForm.commune.trim(),
+      submit: null
     }
 
     setFormErrors(errors)
 
-    if (Object.values(errors).some(err => err)) {
+    if (errors.name || errors.phone || errors.wilaya || errors.commune) {
       // Find the first error element and scroll to it
       const firstError = Object.keys(errors).find(key => errors[key])
       const el = document.getElementsByName(firstError)[0]
@@ -116,92 +171,52 @@ export default function CheckoutPage() {
       return
     }
 
-    // Success flow - save order history and current user
-    const newOrderId = `EH-2026-${Math.floor(1000 + Math.random() * 9000)}`
-    const currentDate = new Date().toISOString().split('T')[0]
-    
-    // 1. Construct new order object
-    const newOrder = {
-      orderId: newOrderId,
-      date: currentDate,
-      items: cartItems.map(item => ({
-        id: item.id || 1,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        image: item.image,
-        size: item.size || '',
-        color: item.color || ''
-      })),
-      total: totalCost,
-      shippingCost: shippingCost,
-      status: 'pending',
-      shippingAddress: `${orderForm.commune}, ${getWilayaName(orderForm.wilaya)}`
-    }
-
-    // 2. Load existing orders and prepend the new one
-    let existingOrders = []
-    const storedOrders = localStorage.getItem('orderHistory')
-    if (storedOrders) {
-      try {
-        existingOrders = JSON.parse(storedOrders)
-      } catch (e) {
-        console.error('Failed to parse existing orders', e)
+    setIsSubmitting(true)
+    try {
+      // Send order to backend
+      const orderData = {
+        clientName: orderForm.name,
+        clientPhone: orderForm.phone,
+        fullName: orderForm.name,
+        phone: orderForm.phone,
+        wilaya: orderForm.wilaya,
+        commune: orderForm.commune,
+        shippingType: shippingType,
+        addressDetails: `${orderForm.commune}, ${getWilayaName(orderForm.wilaya)}`,
+        items: cartItems.map(item => ({
+          productId: Number(item.id),
+          quantity: Number(item.quantity),
+          size: item.size || null,
+          color: item.color || null
+        }))
       }
-    } else {
-      existingOrders = [
-        {
-          orderId: 'EH-2026-8941',
-          date: '2026-05-18',
-          items: [
-            {
-              id: 1,
-              name: 'Smart Circuit Breaker Pro',
-              price: 38500,
-              quantity: 2,
-              image: '/p1.jpg',
-              size: '40A Tri-Phase',
-              color: 'Industrial Black'
-            }
-          ],
-          total: 77000,
-          shippingCost: 0,
-          status: 'delivered',
-          shippingAddress: 'Hydra, Algiers (16)'
-        }
-      ]
-    }
-    
-    const updatedOrders = [newOrder, ...existingOrders]
-    localStorage.setItem('orderHistory', JSON.stringify(updatedOrders))
 
-    // 3. Save current user to localStorage (sync profile details)
-    const storedUser = localStorage.getItem('currentUser')
-    let parsedUser = {
-      name: orderForm.name,
-      phone: orderForm.phone,
-      email: `${orderForm.phone.replace(/\s+/g, '')}@electrohub.dz`,
-      company: 'ElectroTech Solutions DZ',
-      wilaya: orderForm.wilaya,
-      commune: orderForm.commune
-    }
-    if (storedUser) {
-      try {
-        const u = JSON.parse(storedUser)
-        parsedUser = {
-          ...u,
-          name: orderForm.name,
-          phone: orderForm.phone,
-          wilaya: orderForm.wilaya,
-          commune: orderForm.commune
-        }
-      } catch (e) {
-        console.error('Failed parsing existing user', e)
+      await api.createOrder(orderData);
+
+      // Try updating local user data as well
+      const storedUser = localStorage.getItem('currentUser')
+      if (storedUser) {
+        try {
+          const u = JSON.parse(storedUser)
+          localStorage.setItem('currentUser', JSON.stringify({
+            ...u,
+            name: orderForm.name,
+            phone: orderForm.phone,
+            wilaya: orderForm.wilaya,
+            commune: orderForm.commune
+          }))
+        } catch (err) {}
       }
-    }
-    localStorage.setItem('currentUser', JSON.stringify(parsedUser))
 
-    setIsOrderSuccess(true)
+      setIsSubmitting(false)
+      setIsOrderSuccess(true)
+    } catch (err) {
+      setIsSubmitting(false)
+      setFormErrors(prev => ({
+        ...prev,
+        submit: err.message || 'Failed to place order. Please try again.'
+      }))
+    }
   }
 
   return (
@@ -319,19 +334,27 @@ export default function CheckoutPage() {
                           name="wilaya"
                           value={orderForm.wilaya}
                           onChange={(e) => {
-                            setOrderForm({ ...orderForm, wilaya: e.target.value })
-                            setFormErrors({ ...formErrors, wilaya: false })
+                            const nextWilaya = e.target.value;
+                            setOrderForm({ ...orderForm, wilaya: nextWilaya, commune: '' })
+                            setFormErrors({ ...formErrors, wilaya: false, commune: false })
+                            const nextWilayaData = territories.find(t => `${t.name} (${t.code})` === nextWilaya);
+                            if (nextWilayaData && !nextWilayaData.desk_active && shippingType === 'desk') {
+                              setShippingType('home');
+                            }
                           }}
                           className={`w-full appearance-none pl-11 pr-8 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer ${
                             formErrors.wilaya ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
                           }`}
                         >
                           <option value="" className="bg-background text-foreground/30">{t('productPage.wilaya', 'Wilaya')}</option>
-                          {WILAYAS.map(w => (
-                            <option key={w} value={w} className="bg-background text-foreground">
-                              {getWilayaName(w)}
-                            </option>
-                          ))}
+                          {territories.map(tObj => {
+                            const optionValue = `${tObj.name} (${tObj.code})`;
+                            return (
+                              <option key={tObj.code} value={optionValue} className="bg-background text-foreground">
+                                {tObj.name} ({tObj.code})
+                              </option>
+                            )
+                          })}
                         </select>
                         <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
                           <ChevronDown className="w-3.5 h-3.5" />
@@ -349,23 +372,99 @@ export default function CheckoutPage() {
                       </label>
                       <div className="relative">
                         <Building className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
-                        <input
-                          type="text"
-                          name="commune"
-                          placeholder={t('productPage.commune', 'Commune')}
-                          value={orderForm.commune}
-                          onChange={(e) => {
-                            setOrderForm({ ...orderForm, commune: e.target.value })
-                            setFormErrors({ ...formErrors, commune: false })
-                          }}
-                          className={`w-full pl-11 pr-4 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/20 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
-                            formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                          }`}
-                        />
+                        {territories.length > 0 ? (
+                          <>
+                            <select
+                              name="commune"
+                              value={orderForm.commune}
+                              onChange={(e) => {
+                                setOrderForm({ ...orderForm, commune: e.target.value })
+                                setFormErrors({ ...formErrors, commune: false })
+                              }}
+                              disabled={!orderForm.wilaya}
+                              className={`w-full appearance-none pl-11 pr-8 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
+                              }`}
+                            >
+                              <option value="" className="bg-background text-foreground/30">{t('productPage.commune', 'Commune')}</option>
+                              {(selectedWilayaData?.communes || []).map(c => (
+                                <option key={c.id} value={c.name} className="bg-background text-foreground">
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </div>
+                          </>
+                        ) : (
+                          <input
+                            type="text"
+                            name="commune"
+                            placeholder={t('productPage.commune', 'Commune')}
+                            value={orderForm.commune}
+                            onChange={(e) => {
+                              setOrderForm({ ...orderForm, commune: e.target.value })
+                              setFormErrors({ ...formErrors, commune: false })
+                            }}
+                            className={`w-full pl-11 pr-4 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/20 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
+                              formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
+                            }`}
+                          />
+                        )}
                       </div>
                       {formErrors.commune && (
                         <span className="text-[9px] text-kurima-orange font-bold mt-1 uppercase tracking-wider text-left rtl:text-right">{t('productPage.required', 'Required')}</span>
                       )}
+                    </div>
+                  </div>
+
+                  {/* Delivery Method */}
+                  <div className="flex flex-col mt-4">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted mb-2 text-left rtl:text-right">
+                      {t('checkout.deliveryType', 'Delivery Method')}
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {/* Home option */}
+                      <button
+                        type="button"
+                        onClick={() => setShippingType('home')}
+                        className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
+                          shippingType === 'home'
+                            ? 'border-kurima-orange bg-kurima-orange/[0.03] text-foreground ring-1 ring-kurima-orange/20'
+                            : 'border-border/80 bg-foreground/[0.01] text-foreground/75 hover:bg-foreground/[0.02]'
+                        }`}
+                      >
+                        <Truck className="w-5 h-5 mb-1.5 text-kurima-orange" />
+                        <span className="text-xs font-bold">{t('checkout.homeDelivery', 'Home Delivery')}</span>
+                        {selectedWilayaData && (
+                          <span className="text-[10px] font-semibold text-kurima-muted mt-0.5">
+                            {Number(selectedWilayaData.home_price).toLocaleString()} DA
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Stop desk option */}
+                      <button
+                        type="button"
+                        onClick={() => setShippingType('desk')}
+                        disabled={selectedWilayaData && !selectedWilayaData.desk_active}
+                        className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                          shippingType === 'desk'
+                            ? 'border-kurima-orange bg-kurima-orange/[0.03] text-foreground ring-1 ring-kurima-orange/20'
+                            : 'border-border/80 bg-foreground/[0.01] text-foreground/75 hover:bg-foreground/[0.02]'
+                        }`}
+                      >
+                        <Building className="w-5 h-5 mb-1.5 text-kurima-orange" />
+                        <span className="text-xs font-bold">{t('checkout.stopDesk', 'Stop Desk')}</span>
+                        {selectedWilayaData && (
+                          <span className="text-[10px] font-semibold text-kurima-muted mt-0.5">
+                            {selectedWilayaData.desk_active 
+                              ? `${Number(selectedWilayaData.desk_price).toLocaleString()} DA` 
+                              : t('checkout.unavailable', 'Unavailable')}
+                          </span>
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -380,24 +479,37 @@ export default function CheckoutPage() {
                       {shippingCost === 0 ? (
                         <span className="font-black text-[10px] text-green-500 uppercase tracking-wider">{t('checkout.freeShippingBadge', 'FREE Shipping')}</span>
                       ) : (
-                        <span className="font-semibold text-kurima-orange">{shippingCost.toLocaleString()} DA</span>
+                        <span className="font-semibold text-black dark:text-kurima-orange">{shippingCost.toLocaleString()} DA</span>
                       )}
                     </div>
                     <div className="h-[1px] bg-foreground/10 my-1" />
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-bold text-foreground">{t('productPage.total', 'Total:')}</span>
-                      <span className="font-black text-kurima-orange text-base">{totalCost.toLocaleString()} DA</span>
+                      <span className="font-black text-black dark:text-kurima-orange text-base">{totalCost.toLocaleString()} DA</span>
                     </div>
                   </div>
+
+                  {formErrors.submit && (
+                    <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] font-bold p-3.5 rounded-2xl uppercase tracking-wider text-center mt-4">
+                      {formErrors.submit}
+                    </div>
+                  )}
 
                   {/* Single checkout action button */}
                   <div className="pt-4">
                     <Button
                       type="submit"
+                      disabled={isSubmitting}
                       className="w-full bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold rounded-full py-5 text-sm shadow-lg shadow-kurima-orange/20 cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2 group"
                     >
-                      <Zap className="w-4 h-4 fill-black text-black animate-pulse" />
-                      {t('checkout.confirmOrder', 'Confirm Order')}
+                      {isSubmitting ? (
+                        <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 fill-black text-black animate-pulse" />
+                          {t('checkout.confirmOrder', 'Confirm Order')}
+                        </>
+                      )}
                     </Button>
                   </div>
                 </form>
@@ -439,7 +551,7 @@ export default function CheckoutPage() {
                       </div>
                       <div className="flex justify-between items-center text-xs mt-2">
                         <span className="text-kurima-muted">{t('cart.qty', 'Qty:')} {item.quantity}</span>
-                        <span className="font-black text-kurima-orange">{(item.price * item.quantity).toLocaleString()} DA</span>
+                        <span className="font-black text-black dark:text-kurima-orange">{(item.price * item.quantity).toLocaleString()} DA</span>
                       </div>
                     </div>
                   </div>
@@ -451,7 +563,7 @@ export default function CheckoutPage() {
                 <div className="mt-6 p-4 bg-kurima-orange/5 border border-kurima-orange/10 rounded-2xl flex items-center gap-3">
                   <Truck className="w-5 h-5 text-kurima-orange shrink-0 animate-bounce" />
                   <span className="text-[10px] sm:text-xs text-foreground/80 font-medium text-left rtl:text-right leading-relaxed">
-                    {t('cart.addMorePrefix', 'Add ')}<span className="font-extrabold text-kurima-orange">{(SHIPPING_THRESHOLD - cartTotal).toLocaleString()} DA</span>{t('cart.addMoreSuffix', ' more for free bulk delivery.')}
+                    {t('cart.addMorePrefix', 'Add ')}<span className="font-extrabold text-black dark:text-kurima-orange">{(SHIPPING_THRESHOLD - cartTotal).toLocaleString()} DA</span>{t('cart.addMoreSuffix', ' more for free bulk delivery.')}
                   </span>
                 </div>
               )}
@@ -474,7 +586,7 @@ export default function CheckoutPage() {
                 <Separator className="bg-foreground/10 my-3" />
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-black text-foreground">{t('checkout.estimatedTotal', 'Estimated Total:')}</span>
-                  <span className="text-lg font-black text-kurima-orange">{totalCost.toLocaleString()} DA</span>
+                  <span className="text-lg font-black text-black dark:text-kurima-orange">{totalCost.toLocaleString()} DA</span>
                 </div>
               </div>
 

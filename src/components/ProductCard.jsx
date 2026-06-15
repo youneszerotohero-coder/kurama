@@ -61,10 +61,12 @@ export default function ProductCard({ product, index }) {
         <div>
           <div className="flex justify-between items-center mb-1.5">
             <span className="text-[10px] text-kurima-muted font-black tracking-wider uppercase">
-              {product.brand || 'Premium'}
+              {typeof product.brand === 'object' && product.brand !== null ? (product.brand.name || 'Premium') : (product.brand || 'Premium')}
             </span>
             <span className="text-[10px] text-kurima-orange/80 font-bold uppercase tracking-widest">
-              {t(product.category).split(' ')[0]}
+              {typeof product.category === 'object' && product.category !== null 
+                ? (t(product.category.name || '').split(' ')[0]) 
+                : (t(product.category || '').split(' ')[0])}
             </span>
           </div>
           <h3 className="font-bold text-foreground text-sm mb-2 group-hover:text-kurima-orange transition-colors line-clamp-2">
@@ -73,15 +75,20 @@ export default function ProductCard({ product, index }) {
         </div>
         
         <div className="flex items-center justify-between mt-2 pt-3 border-t border-white/5">
-          <div className="flex items-center gap-2">
-            <span className="text-kurima-orange font-black text-sm">
-              {formattedPrice} DA
+          <div className="flex flex-col">
+            <span className="text-[10px] text-kurima-muted font-black mb-0.5">
+              Ref: {product.ref || `REF-P${product.id}`}
             </span>
-            {formattedOriginalPrice && (
-              <span className="text-foreground/45 line-through text-[10px] font-semibold">
-                {formattedOriginalPrice} DA
+            <div className="flex items-center gap-2">
+              <span className="text-black dark:text-kurima-orange font-black text-sm">
+                {formattedPrice} DA
               </span>
-            )}
+              {formattedOriginalPrice && (
+                <span className="text-foreground/45 line-through text-[10px] font-semibold">
+                  {formattedOriginalPrice} DA
+                </span>
+              )}
+            </div>
           </div>
           
           {/* Buy Button in the bottom right! */}

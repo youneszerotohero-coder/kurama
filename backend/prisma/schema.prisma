@@ -1,0 +1,207 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Role {
+  CLIENT
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum ProductTag {
+  BEST_SELLER
+  NEW
+  TRENDING
+  SALE
+  NONE
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id           Int      @id @default(autoincrement())
+  fullName     String
+  email        String   @unique
+  phone        String   @unique
+  company      String?
+  wilaya       String
+  commune      String
+  approved     Boolean  @default(false)
+  role         Role     @default(CLIENT)
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  orders       Order[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Category {
+  id             Int       @id @default(autoincrement())
+  name           String    @unique // e.g. "distribution", "smart"
+  parentCategory String?
+  image          String?
+  products       Product[]
+  gammes         Gamme[]
+}
+
+model Brand {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique // e.g. "SIEMENS", "SCHNEIDER"
+  origin   String?
+  image    String?
+  products Product[]
+  gammes   Gamme[]
+}
+
+model Gamme {
+  id         Int       @id @default(autoincrement())
+  name       String    // e.g. "Elite", "Pro"
+  image      String?
+  brandId    Int
+  brand      Brand     @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  categoryId Int
+  category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products   Product[]
+
+  @@unique([name, brandId, categoryId]) // Prevent duplicate gamme definitions
+}
+
+model Product {
+  id                  Int          @id @default(autoincrement())
+  ref                 String       @unique // e.g. "REF-S1-098"
+  name                String
+  description         String       @db.Text
+  priceBought         Decimal      @db.Decimal(12, 2) // Wholesale purchase price (essential for profit tracking)
+  priceSold           Decimal      @db.Decimal(12, 2) // Default selling price
+  promotionPercentage Decimal      @default(0.0)      // Active discount
+  quantity            Int          @default(0)        // Stock inventory count
+  inStock             Boolean      @default(true)
+  rating              Float        @default(5.0)
+  image               String       // Primary thumbnail image path
+  images              String[]     // Additional slideshow images
+  tag                 ProductTag   @default(NONE)
+  details             String[]     // Technical features list bullet points
+  sizes               Json         @default("[]") // Spec objects: [{ name, priceBought, priceSold }]
+  colors              Json         // Array of colors: [{ name: "Standard Black", hex: "#000000" }]
+  positives           String[]     // Highlighting selling points
+  negatives           String[]     // Limitations checklist
+  
+  // Relations
+  categoryId          Int
+  category            Category     @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brandId             Int
+  brand               Brand        @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  gammeId             Int?
+  gamme               Gamme?       @relation(fields: [gammeId], references: [id], onDelete: SetNull)
+
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  orderItems          OrderItem[]
+
+  @@index([categoryId])
+  @@index([brandId])
+  @@index([gammeId])
+  @@index([ref])
+}
+
+model Order {
+  id              Int         @id @default(autoincrement())
+  orderId         String      @unique // Custom generated ID: EH-YYYY-XXXXX
+  date            DateTime    @default(now())
+  clientName      String      // Snapshot of name at order placement
+  clientPhone     String      // Snapshot of phone at order placement
+  clientEmail     String      // Snapshot of email at order placement
+  wilaya          String
+  commune         String
+  addressDetails  String?
+  shippingType    String      @default("home")
+  shippingFee     Decimal     @db.Decimal(10, 2)
+  total           Decimal     @db.Decimal(12, 2) // Calculated grand total
+  status          OrderStatus @default(PENDING)
+  
+  // Relations
+  userId          Int?
+  client          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  items           OrderItem[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([orderId])
+}
+
+model OrderItem {
+  id        Int      @id @default(autoincrement())
+  name      String   // Snapshot of product name
+  price     Decimal  @db.Decimal(12, 2) // Price sold at placement time
+  quantity  Int
+  image     String?  // Snapshot of image path
+  size      String?  // Chosen specification
+  color     String?  // Chosen color enclosure option
+  
+  // Relations
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+}
+
+model SystemSettings {
+  id              Int      @id @default(1) // Single row config
+  deliveryApiKey  String?
+  metaPixelId     String?
+  minFreeDelivery Decimal  @default(15000.00) @db.Decimal(12, 2)
+  updatedAt       DateTime @updatedAt
+}
+
+model ShippingRate {
+  id            Int       @id @default(autoincrement())
+  wilayaCode    String    @unique
+  wilayaName    String
+  wilayaNameAr  String
+  homePrice     Decimal   @db.Decimal(12, 2) @default(0.0)
+  deskPrice     Decimal   @db.Decimal(12, 2) @default(0.0)
+  isActive      Boolean   @default(true)
+  homeActive    Boolean   @default(true)
+  deskActive    Boolean   @default(true)
+  communes      Commune[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Commune {
+  id             Int          @id @default(autoincrement())
+  shippingRateId Int
+  shippingRate   ShippingRate @relation(fields: [shippingRateId], references: [id], onDelete: Cascade)
+  name           String
+  nameAr         String
+  postCode       String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([shippingRateId])
+}

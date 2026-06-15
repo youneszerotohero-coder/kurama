@@ -16,48 +16,58 @@ import {
   Package
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import api from '@/lib/api'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const [products, setProducts] = useState([])
   const [orders, setOrders] = useState([])
   const [clients, setClients] = useState([])
+  const [stats, setStats] = useState({
+    totalRevenue: 0,
+    profitMade: 0,
+    averageOrderValue: 0,
+    pendingOrdersCount: 0,
+    totalOrdersCount: 0,
+  })
 
   useEffect(() => {
-    // Products
-    const storedProds = localStorage.getItem('admin_products')
-    if (storedProds) {
+    const loadDashboard = async () => {
       try {
-        setProducts(JSON.parse(storedProds))
+        const [productsData, clientsData, ordersData, statsData] = await Promise.all([
+          api.adminGetProducts(),
+          api.adminGetClients(),
+          api.adminGetOrders(),
+          api.getDashboardStats(),
+        ])
+
+        setProducts(productsData)
+        setClients(clientsData)
+        setOrders(
+          ordersData.map((order) => ({
+            ...order,
+            total: Number(order.total),
+            shippingFee: Number(order.shippingFee),
+            date: new Date(order.date).toISOString().split('T')[0],
+            status: order.status.toLowerCase(),
+          }))
+        )
+        setStats({
+          totalRevenue: Number(statsData.totalRevenue || 0),
+          profitMade: Number(statsData.profitMade || 0),
+          averageOrderValue: Number(statsData.averageOrderValue || 0),
+          pendingOrdersCount: Number(statsData.pendingOrdersCount || 0),
+          totalOrdersCount: Number(statsData.totalOrdersCount || 0),
+        })
       } catch (e) {
-        console.error(e)
+        console.error('Failed to load admin dashboard from backend:', e)
       }
     }
 
-    // Clients
-    const storedClients = localStorage.getItem('admin_clients')
-    if (storedClients) {
-      try {
-        setClients(JSON.parse(storedClients))
-      } catch (e) {
-        console.error(e)
-      }
-    }
-
-    // Orders
-    const storedOrders = localStorage.getItem('orderHistory')
-    if (storedOrders) {
-      try {
-        setOrders(JSON.parse(storedOrders))
-      } catch (e) {
-        console.error(e)
-      }
-    }
+    loadDashboard()
   }, [])
 
   // Calculations
-  const totalSales = orders.filter(o => o.status !== 'cancelled').reduce((sum, o) => sum + o.total, 0)
-  const averageOrderVal = orders.length > 0 ? Math.round(totalSales / orders.length) : 0
   const activeClientsCount = clients.filter(c => c.approved).length
   const lowStockProducts = products.filter(p => p.quantity <= 10)
 
@@ -89,7 +99,7 @@ export default function Dashboard() {
           <div className="flex justify-between items-start">
             <div>
               <span className="text-[10px] font-black uppercase tracking-widest text-kurima-muted">Total Sales Revenue</span>
-              <h3 className="text-2xl sm:text-3xl font-black text-foreground mt-2">{totalSales.toLocaleString()} DA</h3>
+              <h3 className="text-2xl sm:text-3xl font-black text-foreground mt-2">{stats.totalRevenue.toLocaleString()} DA</h3>
             </div>
             <div className="w-10 h-10 rounded-2xl bg-kurima-orange/10 flex items-center justify-center text-kurima-orange">
               <Coins className="w-5 h-5" />
@@ -106,8 +116,8 @@ export default function Dashboard() {
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(151,255,0,0.015),transparent_50%)] pointer-events-none" />
           <div className="flex justify-between items-start">
             <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-kurima-muted">Avg Order Value</span>
-              <h3 className="text-2xl sm:text-3xl font-black text-kurima-orange mt-2">{averageOrderVal.toLocaleString()} DA</h3>
+              <span className="text-[10px] font-black uppercase tracking-widest text-kurima-muted">Profit made</span>
+              <h3 className="text-2xl sm:text-3xl font-black text-kurima-orange mt-2">{stats.profitMade.toLocaleString()} DA</h3>
             </div>
             <div className="w-10 h-10 rounded-2xl bg-kurima-orange/10 flex items-center justify-center text-kurima-orange">
               <Activity className="w-5 h-5" />

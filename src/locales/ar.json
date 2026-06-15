@@ -209,6 +209,8 @@
     "selectCategory": "اختر الفئة",
     "selectManufacturer": "اختر المصنع",
     "allManufacturers": "جميع المصنعين",
+    "selectGamme": "اختر التشكيلة",
+    "allGammes": "كل التشكيلات",
     "maxBudget": "الميزانية القصوى",
     "inStockOnly": "المتوفر في المخزن فقط",
     "inStockDesc": "يستبعد المنتجات غير المتوفرة",
