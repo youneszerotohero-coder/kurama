@@ -60,6 +60,15 @@ export default function ProfilePage() {
   // Orders state
   const [orders, setOrders] = useState([])
   const [expandedOrderId, setExpandedOrderId] = useState(null)
+  const [territories, setTerritories] = useState([])
+
+  // Find active shipping rate matching the selected wilaya
+  const selectedWilayaData = territories.find(t => {
+    const optionName = `${t.name} (${t.code})`;
+    return optionName === userData.wilaya || 
+      (userData.wilaya && userData.wilaya.toLowerCase().includes(t.name.toLowerCase())) ||
+      (userData.wilaya && userData.wilaya.includes(`(${t.code})`))
+  });
 
   // Helper to translate Wilaya names
   const getWilayaName = (w) => {
@@ -92,13 +101,17 @@ export default function ProfilePage() {
 
     const loadProfileAndOrders = async () => {
       try {
-        const [publicSettings, user, myOrders] = await Promise.all([
+        const [publicSettings, user, myOrders, territoriesData] = await Promise.all([
           api.getPublicSettings(),
           api.getMe(),
           api.getMyOrders(),
+          api.getTerritories().catch(() => []),
         ])
 
         setShippingThreshold(Number(publicSettings.minFreeDelivery || 15000))
+
+        const rawTerritories = territoriesData.data || territoriesData || []
+        setTerritories(rawTerritories)
 
         const mappedUser = {
           ...user,
@@ -111,11 +124,13 @@ export default function ProfilePage() {
           ...o,
           date: new Date(o.date).toISOString().split('T')[0],
           status: o.status.toLowerCase(), // frontend uses lowercase status
+          total: Number(o.total),
           shippingCost: Number(o.shippingFee),
           shippingAddress: `${o.addressDetails ? `${o.addressDetails}, ` : ''}${o.commune}, ${o.wilaya}`,
           items: o.items.map(item => ({
             ...item,
             price: Number(item.price),
+            quantity: Number(item.quantity)
           }))
         }));
         setOrders(mappedOrders);
@@ -241,7 +256,7 @@ export default function ProfilePage() {
   }
 
   // Calculate stats
-  const totalSpent = orders.reduce((sum, order) => sum + order.total, 0)
+  const totalSpent = orders.reduce((sum, order) => sum + (Number(order.total) || 0), 0)
   const totalOrders = orders.length
 
   return (
@@ -485,7 +500,7 @@ export default function ProfilePage() {
                         <select
                           value={userData.wilaya}
                           onChange={(e) => {
-                            setUserData({ ...userData, wilaya: e.target.value })
+                            setUserData({ ...userData, wilaya: e.target.value, commune: '' })
                             if (formErrors.wilaya) setFormErrors({ ...formErrors, wilaya: null })
                           }}
                           className={`w-full appearance-none ${isRtl ? 'pr-11 pl-8' : 'pl-11 pr-8'} py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer ${
@@ -493,11 +508,11 @@ export default function ProfilePage() {
                           }`}
                         >
                           <option value="" className="bg-background text-foreground/30">{t('profile.wilaya', 'Wilaya')}</option>
-                          {WILAYAS.map(w => (
+                          {territories.map(tObj => { const w = `${tObj.name} (${tObj.code})`; return (
                             <option key={w} value={w} className="bg-background text-foreground">
                               {getWilayaName(w)}
                             </option>
-                          ))}
+                          )})}
                         </select>
                         <div className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45`}>
                           <ChevronDown className="w-3.5 h-3.5" />
@@ -515,17 +530,43 @@ export default function ProfilePage() {
                       </label>
                       <div className="relative">
                         <Building className={`absolute ${isRtl ? 'right-4' : 'left-4'} top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none`} />
-                        <input
-                          type="text"
-                          value={userData.commune}
-                          onChange={(e) => {
-                            setUserData({ ...userData, commune: e.target.value })
-                            if (formErrors.commune) setFormErrors({ ...formErrors, commune: null })
-                          }}
-                          className={`w-full ${isRtl ? 'pr-11 pl-4' : 'pl-11 pr-4'} py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/20 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
-                            formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                          }`}
-                        />
+                        {territories.length > 0 ? (
+                          <>
+                            <select
+                              value={userData.commune}
+                              onChange={(e) => {
+                                setUserData({ ...userData, commune: e.target.value })
+                                if (formErrors.commune) setFormErrors({ ...formErrors, commune: null })
+                              }}
+                              disabled={!userData.wilaya}
+                              className={`w-full appearance-none ${isRtl ? 'pr-11 pl-8' : 'pl-11 pr-8'} py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                                formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
+                              }`}
+                            >
+                              <option value="" className="bg-background text-foreground/30">{t('profile.commune', 'Commune')}</option>
+                              {(selectedWilayaData?.communes || []).map(c => (
+                                <option key={c.id} value={c.name} className="bg-background text-foreground">
+                                  {c.name}
+                                </option>
+                              ))}
+                            </select>
+                            <div className={`absolute ${isRtl ? 'left-3' : 'right-3'} top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45`}>
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </div>
+                          </>
+                        ) : (
+                          <input
+                            type="text"
+                            value={userData.commune}
+                            onChange={(e) => {
+                              setUserData({ ...userData, commune: e.target.value })
+                              if (formErrors.commune) setFormErrors({ ...formErrors, commune: null })
+                            }}
+                            className={`w-full ${isRtl ? 'pr-11 pl-4' : 'pl-11 pr-4'} py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/20 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
+                              formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
+                            }`}
+                          />
+                        )}
                       </div>
                       {formErrors.commune && (
                         <span className="text-[9px] text-kurima-orange font-bold mt-1 uppercase tracking-wider">{formErrors.commune}</span>
@@ -658,7 +699,7 @@ export default function ProfilePage() {
                 <div className="space-y-4">
                   {orders.map((order) => {
                     const isExpanded = expandedOrderId === order.orderId
-                    const totalItemsCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
+                    const totalItemsCount = order.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0)
                     
                     return (
                       <div 

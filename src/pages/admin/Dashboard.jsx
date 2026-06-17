@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
@@ -23,6 +23,8 @@ export default function Dashboard() {
   const [products, setProducts] = useState([])
   const [orders, setOrders] = useState([])
   const [clients, setClients] = useState([])
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
   const [stats, setStats] = useState({
     totalRevenue: 0,
     profitMade: 0,
@@ -31,14 +33,14 @@ export default function Dashboard() {
     totalOrdersCount: 0,
   })
 
+  // Load static lists on mount
   useEffect(() => {
-    const loadDashboard = async () => {
+    const loadStaticData = async () => {
       try {
-        const [productsData, clientsData, ordersData, statsData] = await Promise.all([
+        const [productsData, clientsData, ordersData] = await Promise.all([
           api.adminGetProducts(),
           api.adminGetClients(),
           api.adminGetOrders(),
-          api.getDashboardStats(),
         ])
 
         setProducts(productsData)
@@ -52,6 +54,19 @@ export default function Dashboard() {
             status: order.status.toLowerCase(),
           }))
         )
+      } catch (e) {
+        console.error('Failed to load admin dashboard static data:', e)
+      }
+    }
+
+    loadStaticData()
+  }, [])
+
+  // Load stats dynamically when date range changes
+  useEffect(() => {
+    const loadStats = async () => {
+      try {
+        const statsData = await api.getDashboardStats(startDate, endDate)
         setStats({
           totalRevenue: Number(statsData.totalRevenue || 0),
           profitMade: Number(statsData.profitMade || 0),
@@ -60,19 +75,94 @@ export default function Dashboard() {
           totalOrdersCount: Number(statsData.totalOrdersCount || 0),
         })
       } catch (e) {
-        console.error('Failed to load admin dashboard from backend:', e)
+        console.error('Failed to load dashboard stats:', e)
       }
     }
 
-    loadDashboard()
-  }, [])
+    loadStats()
+  }, [startDate, endDate])
 
   // Calculations
   const activeClientsCount = clients.filter(c => c.approved).length
   const lowStockProducts = products.filter(p => p.quantity <= 10)
 
+  // Calculations & filters based on selected date interval
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      if (startDate && new Date(order.date) < new Date(startDate)) return false
+      if (endDate) {
+        const end = new Date(endDate)
+        end.setHours(23, 59, 59, 999)
+        if (new Date(order.date) > end) return false
+      }
+      return true
+    })
+  }, [orders, startDate, endDate])
+
+  const chartData = useMemo(() => {
+    if (filteredOrders.length === 0) return []
+    // Group orders by date and sum total
+    const groups = {}
+    filteredOrders.forEach(order => {
+      const d = order.date // YYYY-MM-DD
+      groups[d] = (groups[d] || 0) + order.total
+    })
+    // Sort dates
+    const sortedDates = Object.keys(groups).sort((a, b) => new Date(a) - new Date(b))
+    return sortedDates.map(date => ({
+      date,
+      total: groups[date]
+    }))
+  }, [filteredOrders])
+
+  const svgPath = useMemo(() => {
+    const width = 500
+    const height = 100 // height scale margin
+    const fillHeight = 150
+    if (chartData.length === 0) {
+      return {
+        path: 'M 0 120 L 500 120',
+        fillPath: 'M 0 120 L 500 120 L 500 150 L 0 150 Z',
+        points: []
+      }
+    }
+    const maxTotal = Math.max(...chartData.map(d => d.total), 1)
+    
+    // Calculate x and y for each point
+    const points = chartData.map((d, i) => {
+      const x = chartData.length > 1 ? (i / (chartData.length - 1)) * width : width / 2
+      // Invert Y because 0 is at the top
+      const y = fillHeight - 20 - (d.total / maxTotal) * height
+      return { x, y, total: d.total, date: d.date }
+    })
+
+    // Construct SVG path
+    let dAttr = `M ${points[0].x} ${points[0].y}`
+    if (points.length === 1) {
+      dAttr += ` L ${width} ${points[0].y}`
+      const fillPath = `${dAttr} L ${width} ${fillHeight} L 0 ${fillHeight} Z`
+      return { path: dAttr, fillPath, points }
+    }
+
+    for (let i = 1; i < points.length; i++) {
+      const prev = points[i - 1]
+      const curr = points[i]
+      const cpX1 = prev.x + (curr.x - prev.x) / 2
+      const cpY1 = prev.y
+      const cpX2 = prev.x + (curr.x - prev.x) / 2
+      const cpY2 = curr.y
+      dAttr += ` C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${curr.x} ${curr.y}`
+    }
+
+    const fillPath = `${dAttr} L ${points[points.length - 1].x} ${fillHeight} L ${points[0].x} ${fillHeight} Z`
+    
+    return { path: dAttr, fillPath, points }
+  }, [chartData])
+
   // Recent order list limits
-  const recentOrders = [...orders].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4)
+  const recentOrders = useMemo(() => {
+    return [...filteredOrders].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 4)
+  }, [filteredOrders])
 
   const getStatusColor = (status) => {
     const maps = {
@@ -91,6 +181,45 @@ export default function Dashboard() {
       animate={{ opacity: 1, y: 0 }}
       className="space-y-8 animate-fade-in-up"
     >
+      {/* Date Interval Filter Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card border border-border p-6 rounded-3xl shadow-xl">
+        <div className="text-left">
+          <h2 className="text-xl font-black text-foreground uppercase tracking-tight">Logistics & Performance</h2>
+          <p className="text-xs text-kurima-muted mt-1">Filter your dashboard metrics by specific period</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+          <div className="flex items-center gap-2 bg-foreground/[0.02] border border-border/60 rounded-2xl px-3 py-1.5">
+            <span className="text-[10px] font-black uppercase text-kurima-muted">From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer"
+            />
+          </div>
+          <div className="flex items-center gap-2 bg-foreground/[0.02] border border-border/60 rounded-2xl px-3 py-1.5">
+            <span className="text-[10px] font-black uppercase text-kurima-muted">To</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="bg-transparent text-xs font-bold text-foreground focus:outline-none cursor-pointer"
+            />
+          </div>
+          {(startDate || endDate) && (
+            <button
+              onClick={() => {
+                setStartDate('')
+                setEndDate('')
+              }}
+              className="text-[10px] font-black uppercase tracking-widest text-kurima-orange hover:text-foreground transition-colors bg-kurima-orange/10 hover:bg-kurima-orange/20 border border-kurima-orange/20 px-4 py-2 rounded-2xl cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Sales */}
@@ -194,33 +323,46 @@ export default function Dashboard() {
                 
                 {/* Area Fill */}
                 <path
-                  d="M 0 130 C 50 110, 100 80, 150 90 C 200 100, 250 50, 300 40 C 350 30, 400 110, 450 60 C 475 35, 500 20, 500 20 L 500 150 L 0 150 Z"
+                  d={svgPath.fillPath}
                   fill="url(#gradient-chart)"
+                  className="transition-all duration-500"
                 />
                 
                 {/* Line */}
                 <path
-                  d="M 0 130 C 50 110, 100 80, 150 90 C 200 100, 250 50, 300 40 C 350 30, 400 110, 450 60 C 475 35, 500 20, 500 20"
+                  d={svgPath.path}
                   fill="none"
                   stroke="#97ff00"
                   strokeWidth="3.5"
                   strokeLinecap="round"
-                  className="drop-shadow-[0_0_8px_rgba(151,255,0,0.4)]"
+                  className="drop-shadow-[0_0_8px_rgba(151,255,0,0.4)] transition-all duration-500"
                 />
                 
                 {/* Glow Nodes */}
-                <circle cx="300" cy="40" r="5" fill="#97ff00" className="animate-pulse" />
-                <circle cx="500" cy="20" r="5" fill="#97ff00" />
+                {svgPath.points.map((pt, idx) => (
+                  <circle
+                    key={idx}
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={idx === svgPath.points.length - 1 ? 5 : 3.5}
+                    fill="#97ff00"
+                    className={idx === svgPath.points.length - 1 ? "animate-pulse" : ""}
+                  />
+                ))}
               </svg>
             </div>
 
             {/* Chart bottom labels */}
             <div className="flex justify-between text-[8px] font-mono text-kurima-muted mt-auto border-t border-foreground/5 pt-2 uppercase tracking-widest z-10">
-              <span>Jan</span>
-              <span>Feb</span>
-              <span>Mar</span>
-              <span>Apr</span>
-              <span>May (Current)</span>
+              {chartData.length > 0 ? (
+                <>
+                  <span>{chartData[0].date}</span>
+                  {chartData.length > 2 && <span>{chartData[Math.floor(chartData.length / 2)].date}</span>}
+                  <span>{chartData[chartData.length - 1].date}</span>
+                </>
+              ) : (
+                <span>No sales data in selected range</span>
+              )}
             </div>
           </div>
 
@@ -237,7 +379,7 @@ export default function Dashboard() {
             </div>
             <div className="bg-foreground/[0.015] border border-border/60 p-3 rounded-xl">
               <span className="text-[8px] font-black uppercase text-kurima-muted">Total Orders</span>
-              <p className="text-sm font-black text-foreground mt-1">{orders.length}</p>
+              <p className="text-sm font-black text-foreground mt-1">{filteredOrders.length}</p>
             </div>
           </div>
         </div>

@@ -43,7 +43,32 @@ export default function ProductPage() {
   const [selectedSize, setSelectedSize] = useState('')
   const [selectedColor, setSelectedColor] = useState('')
   const [quantity, setQuantity] = useState(1)
-  const [isLiked, setIsLiked] = useState(false)
+  const [isLiked, setIsLiked] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      return favs.includes(Number(id))
+    } catch (e) {
+      return false
+    }
+  })
+
+  const toggleLike = () => {
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      const numId = Number(id)
+      let nextFavs
+      if (favs.includes(numId)) {
+        nextFavs = favs.filter(x => x !== numId)
+        setIsLiked(false)
+      } else {
+        nextFavs = [...favs, numId]
+        setIsLiked(true)
+      }
+      localStorage.setItem('kurama_favorites', JSON.stringify(nextFavs))
+    } catch (e) {
+      console.error(e)
+    }
+  }
   const [relatedProducts, setRelatedProducts] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -64,16 +89,25 @@ export default function ProductPage() {
   const [isOrderSuccess, setIsOrderSuccess] = useState(false)
   const [territories, setTerritories] = useState([])
   const [shippingType, setShippingType] = useState('home') // 'home' or 'desk'
+  const [minFreeDelivery, setMinFreeDelivery] = useState(15000)
 
-  // Fetch territories & pre-fill profile details
+  // Fetch settings, territories & pre-fill profile details
   useEffect(() => {
-    const loadTerritoriesAndProfile = async () => {
+    const loadSettingsAndProfile = async () => {
       try {
-        const territoriesData = await api.getTerritories().catch(() => [])
+        const [settings, territoriesData] = await Promise.all([
+          api.getPublicSettings().catch(() => ({})),
+          api.getTerritories().catch(() => [])
+        ])
+
+        if (settings && settings.minFreeDelivery !== undefined) {
+          setMinFreeDelivery(Number(settings.minFreeDelivery));
+        }
+
         const rawTerritories = territoriesData.data || territoriesData || []
         setTerritories(rawTerritories)
       } catch (err) {
-        console.error('Failed to fetch territories:', err)
+        console.error('Failed to fetch settings/territories:', err)
       }
 
       const storedUser = localStorage.getItem('currentUser')
@@ -92,12 +126,18 @@ export default function ProductPage() {
       }
     }
 
-    loadTerritoriesAndProfile()
+    loadSettingsAndProfile()
   }, [])
 
   // Fetch product detail and related products on mount or ID change
   useEffect(() => {
     window.scrollTo(0, 0)
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      setIsLiked(favs.includes(Number(id)))
+    } catch (e) {
+      setIsLiked(false)
+    }
     
     const loadProductData = async () => {
       setLoading(true)
@@ -173,6 +213,7 @@ export default function ProductPage() {
   });
 
   const getShippingFee = (wilayaName, type = shippingType) => {
+    if (productCost >= minFreeDelivery) return 0
     if (!wilayaName) return 600
     if (selectedWilayaData) {
       if (type === 'desk') {
@@ -304,7 +345,7 @@ export default function ProductPage() {
               </AnimatePresence>
               
               <button 
-                onClick={() => setIsLiked(!isLiked)}
+                onClick={toggleLike}
                 className="absolute top-6 right-6 w-12 h-12 rounded-full bg-background/40 backdrop-blur-md flex items-center justify-center text-foreground/70 hover:text-red-500 transition-all border border-border"
               >
                 <Heart className={`w-6 h-6 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
@@ -620,7 +661,9 @@ export default function ProductPage() {
                         <span className="text-xs font-bold">{t('checkout.homeDelivery', 'Home Delivery')}</span>
                         {selectedWilayaData && (
                           <span className="text-[10px] font-semibold text-kurima-muted mt-0.5">
-                            {Number(selectedWilayaData.home_price).toLocaleString()} DA
+                            {productCost >= minFreeDelivery 
+                              ? t('checkout.free', 'FREE') 
+                              : `${Number(selectedWilayaData.home_price).toLocaleString()} DA`}
                           </span>
                         )}
                       </button>
@@ -641,7 +684,9 @@ export default function ProductPage() {
                         {selectedWilayaData && (
                           <span className="text-[10px] font-semibold text-kurima-muted mt-0.5">
                             {selectedWilayaData.desk_active 
-                              ? `${Number(selectedWilayaData.desk_price).toLocaleString()} DA` 
+                              ? (productCost >= minFreeDelivery 
+                                  ? t('checkout.free', 'FREE') 
+                                  : `${Number(selectedWilayaData.desk_price).toLocaleString()} DA`)
                               : t('checkout.unavailable', 'Unavailable')}
                           </span>
                         )}
@@ -677,7 +722,9 @@ export default function ProductPage() {
                     </div>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-kurima-muted">{t('productPage.shippingFee', 'Shipping Fee:')}</span>
-                      <span className="font-semibold text-black dark:text-kurima-orange">{shippingCost.toLocaleString()} DA</span>
+                      <span className="font-semibold text-black dark:text-kurima-orange">
+                        {shippingCost === 0 ? t('checkout.free', 'FREE') : `${shippingCost.toLocaleString()} DA`}
+                      </span>
                     </div>
                     <div className="h-[1px] bg-foreground/10 my-1" />
                     <div className="flex justify-between items-center text-xs">
@@ -698,7 +745,7 @@ export default function ProductPage() {
                         {t('productPage.addToCart', 'Add to Cart')}
                       </Button>
                       <Button
-                        onClick={() => setIsLiked(!isLiked)}
+                        onClick={toggleLike}
                         className={`flex-1 font-bold rounded-full py-4 text-xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2 border ${
                           isLiked 
                             ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20' 

@@ -243,13 +243,31 @@ export const updateOrderStatus = async (id, status) => {
 };
 
 // Dashboard Stats Service
-export const getDashboardStats = async () => {
+export const getDashboardStats = async (startDate, endDate) => {
+  const dateFilter = {};
+  if (startDate) {
+    const start = new Date(startDate);
+    if (!isNaN(start.getTime())) {
+      dateFilter.gte = start;
+    }
+  }
+  if (endDate) {
+    const end = new Date(endDate);
+    if (!isNaN(end.getTime())) {
+      end.setUTCHours(23, 59, 59, 999);
+      dateFilter.lte = end;
+    }
+  }
+
+  const hasDateFilter = startDate || endDate;
+
   // Confirm/Shipped/Delivered orders represent actual orders for revenue
   const revenueOrders = await prisma.order.findMany({
     where: {
       status: {
         in: ['CONFIRMED', 'SHIPPED', 'DELIVERED']
-      }
+      },
+      ...(hasDateFilter ? { date: dateFilter } : {})
     },
     include: {
       items: {
@@ -261,10 +279,17 @@ export const getDashboardStats = async () => {
   });
 
   const pendingOrdersCount = await prisma.order.count({
-    where: { status: 'PENDING' }
+    where: {
+      status: 'PENDING',
+      ...(hasDateFilter ? { date: dateFilter } : {})
+    }
   });
 
-  const totalOrdersCount = await prisma.order.count();
+  const totalOrdersCount = await prisma.order.count({
+    where: {
+      ...(hasDateFilter ? { date: dateFilter } : {})
+    }
+  });
 
   let totalRevenue = 0;
   let profitMade = 0;

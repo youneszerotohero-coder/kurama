@@ -91,7 +91,14 @@ export const api = {
   getPublicSettings: () => apiRequest('/settings/public'),
 
   // Admin Dashboard
-  getDashboardStats: () => apiRequest('/admin/orders/dashboard/stats'),
+  getDashboardStats: (startDate, endDate) => {
+    let url = '/admin/orders/dashboard/stats';
+    const params = [];
+    if (startDate) params.push(`startDate=${encodeURIComponent(startDate)}`);
+    if (endDate) params.push(`endDate=${encodeURIComponent(endDate)}`);
+    if (params.length > 0) url += '?' + params.join('&');
+    return apiRequest(url);
+  },
 
   // Admin Products
   adminGetProducts: async () => {

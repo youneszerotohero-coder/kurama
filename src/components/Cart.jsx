@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck, Download } from 'lucide-react'
+import { X, Plus, Minus, Trash2, ShoppingBag, ArrowRight, ShieldCheck, Truck, Download, ChevronDown } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -17,6 +17,7 @@ export default function Cart() {
     setIsCartOpen,
     updateQuantity,
     removeFromCart,
+    updateCartItemSpecs,
     cartCount,
     cartTotal,
   } = useCart()
@@ -325,25 +326,69 @@ export default function Cart() {
                             {/* Variant tags */}
                             {(item.size || item.color) && (
                               <div className="flex flex-wrap gap-1.5 mt-2">
-                                {item.size && (
-                                  <span className="text-[9px] font-black uppercase bg-foreground/5 text-foreground/60 px-2 py-0.5 rounded border border-border/40">
+                                {item.size && item.sizes && item.sizes.length > 0 ? (
+                                  <div className="relative">
+                                    <select
+                                      value={item.size}
+                                      onChange={(e) => updateCartItemSpecs(item.cartItemId, e.target.value, undefined)}
+                                      className="text-[9px] font-black uppercase bg-foreground/5 hover:bg-foreground/10 text-foreground/75 px-2 py-1 pr-6 rounded border border-border/40 focus:outline-none focus:border-kurima-orange appearance-none cursor-pointer"
+                                    >
+                                      {item.sizes.map((s, idx) => {
+                                        const szName = typeof s === 'object' ? s.name : s
+                                        return (
+                                          <option key={idx} value={szName} className="bg-background text-foreground text-xs">
+                                            {t('cart.spec', 'Spec: ')}{szName}
+                                          </option>
+                                        )
+                                      })}
+                                    </select>
+                                    <ChevronDown className="w-2.5 h-2.5 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/50" />
+                                  </div>
+                                ) : item.size ? (
+                                  <span className="text-[9px] font-black uppercase bg-foreground/5 text-foreground/60 px-2 py-1 rounded border border-border/40">
                                     {t('cart.spec', 'Spec: ')}{item.size}
                                   </span>
-                                )}
-                                {item.color && (
-                                  <span className="text-[9px] font-black uppercase bg-foreground/5 text-foreground/60 px-2 py-0.5 rounded border border-border/40">
+                                ) : null}
+
+                                {item.color && item.colors && item.colors.length > 0 ? (
+                                  <div className="relative">
+                                    <select
+                                      value={item.color}
+                                      onChange={(e) => updateCartItemSpecs(item.cartItemId, undefined, e.target.value)}
+                                      className="text-[9px] font-black uppercase bg-foreground/5 hover:bg-foreground/10 text-foreground/75 px-2 py-1 pr-6 rounded border border-border/40 focus:outline-none focus:border-kurima-orange appearance-none cursor-pointer"
+                                    >
+                                      {item.colors.map((c, idx) => {
+                                        const colName = typeof c === 'object' ? c.name : c
+                                        return (
+                                          <option key={idx} value={colName} className="bg-background text-foreground text-xs">
+                                            {t('cart.enclosure', 'Enclosure: ')}{colName}
+                                          </option>
+                                        )
+                                      })}
+                                    </select>
+                                    <ChevronDown className="w-2.5 h-2.5 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/50" />
+                                  </div>
+                                ) : item.color ? (
+                                  <span className="text-[9px] font-black uppercase bg-foreground/5 text-foreground/60 px-2 py-1 rounded border border-border/40">
                                     {t('cart.enclosure', 'Enclosure: ')}{item.color}
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                             )}
                           </div>
 
                           {/* Price & Quantity Control */}
                           <div className="flex items-center justify-between gap-4 mt-3">
-                            <span className="font-black text-sm text-black dark:text-kurima-orange">
-                              {formatPrice(item.price * item.quantity)} DA
-                            </span>
+                            <div className="flex flex-col text-left rtl:text-right">
+                              <span className="font-black text-sm text-black dark:text-kurima-orange">
+                                {formatPrice(item.price * item.quantity)} DA
+                              </span>
+                              {item.promotionPercentage > 0 && (
+                                <span className="text-[10px] text-kurima-muted line-through font-mono mt-0.5">
+                                  {formatPrice((item.priceOriginal || item.price) * item.quantity)} DA
+                                </span>
+                              )}
+                            </div>
 
                             <div className="flex items-center bg-foreground/[0.04] border border-border/60 rounded-lg px-2 py-1 shrink-0">
                               <button

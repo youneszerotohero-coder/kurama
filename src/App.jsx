@@ -78,14 +78,14 @@ const getHeroSlides = (t) => [
     image: '/bg1.jpg',
     subtitle: t('hero.SS26'),
     title: t('hero.precision'),
-    cta: t('hero.explore'),
-    href: '#collections',
+    cta: t('nav.shop', 'Shop'),
+    href: '#categories',
   },
   {
     image: '/bg2.jpg',
     title: t('hero.bold'),
     subtitle: t('hero.limited'),
-    cta: t('hero.shopNow'),
+    cta: t('nav.shop', 'Shop'),
     href: '#new',
   },
 ]
@@ -148,6 +148,7 @@ function Navbar() {
 
   const [megaCategories, setMegaCategories] = useState([])
   const [megaBrands, setMegaBrands] = useState([])
+  const [allProducts, setAllProducts] = useState([])
 
   useEffect(() => {
     const userStr = localStorage.getItem('currentUser')
@@ -183,6 +184,20 @@ function Navbar() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
 
+  const matchedProducts = useMemo(() => {
+    if (!searchQuery || searchQuery.trim() === '') return []
+    const q = searchQuery.toLowerCase()
+    return allProducts.filter(p => {
+      const nameMatch = p.name && p.name.toLowerCase().includes(q)
+      const refMatch = p.ref && p.ref.toLowerCase().includes(q)
+      const brandName = typeof p.brand === 'object' && p.brand !== null ? p.brand.name : p.brand
+      const brandMatch = brandName && String(brandName).toLowerCase().includes(q)
+      const catName = typeof p.category === 'object' && p.category !== null ? p.category.name : p.category
+      const catMatch = catName && String(catName).toLowerCase().includes(q)
+      return nameMatch || refMatch || brandMatch || catMatch
+    }).slice(0, 8)
+  }, [searchQuery, allProducts])
+
   // Categories Mega Menu States
   const [isMegaOpen, setIsMegaOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('')
@@ -197,14 +212,15 @@ function Navbar() {
   const rightBrandsPaneRef = useRef(null)
   const isBrandsScrollingRef = useRef(false)
 
-  // Fetch Categories, Brands and Products to build mega menus dynamically
+  // Fetch Categories, Brands, Products, and Gammes to build mega menus dynamically
   useEffect(() => {
     const fetchMegaMenuData = async () => {
       try {
-        const [products, categories, brands] = await Promise.all([
+        const [products, categories, brands, gammes] = await Promise.all([
           api.getProducts(),
           api.getCategories(),
-          api.getBrands()
+          api.getBrands(),
+          api.getGammes()
         ])
 
         // Categories Map
@@ -245,16 +261,16 @@ function Navbar() {
           }
         })
 
-        // Populate Brand items
-        products.forEach(p => {
-          const brandName = typeof p.brand === 'object' && p.brand !== null ? p.brand.name : p.brand
+        // Populate Brand items with gammes instead of products
+        gammes.forEach(g => {
+          const brandName = typeof g.brand === 'object' && g.brand !== null ? g.brand.name : g.brand
           const brandKey = String(brandName || '').toLowerCase()
           if (brandsMap[brandKey]) {
             brandsMap[brandKey].items.push({
-              id: p.id,
-              name: p.name,
-              image: p.image || p.images?.[0] || '/p1.jpg',
-              tag: p.tag === 'BEST_SELLER' ? 'hot' : p.tag === 'NEW' ? 'new' : undefined
+              id: g.id,
+              name: g.name,
+              brandName: brandName,
+              image: g.image || (g.name.toLowerCase().includes('pro') ? '/p1.jpg' : g.name.toLowerCase().includes('classic') ? '/p2.jpg' : g.name.toLowerCase().includes('elite') ? '/p3.jpg' : '/p4.jpg'),
             })
           }
         })
@@ -264,6 +280,7 @@ function Navbar() {
 
         setMegaCategories(finalCats)
         setMegaBrands(finalBrands)
+        setAllProducts(products)
 
         if (finalCats.length > 0) {
           setActiveTab(finalCats[0].id)
@@ -454,7 +471,7 @@ function Navbar() {
                 <Search className="w-5 h-5" />
               </button>
               <Link 
-                to={currentUser ? "/profile" : "/login"}
+                to={currentUser ? (currentUser.role === 'ADMIN' ? "/admin" : "/profile") : "/login"}
                 className="p-2 text-foreground/70 hover:text-kurima-orange transition-colors cursor-pointer rounded-full hover:bg-foreground/5"
                 aria-label="User Profile"
               >
@@ -492,7 +509,7 @@ function Navbar() {
               className="border-t border-border bg-background/95 dark:bg-[#080d1a]/98 backdrop-blur-2xl overflow-hidden"
             >
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-5">
-                <div className="relative flex items-center gap-4">
+                <div className="relative flex items-center">
                   <div className="relative flex-1">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-foreground/45" />
                     <input
@@ -512,34 +529,50 @@ function Navbar() {
                       </button>
                     )}
                   </div>
-                  <Button 
-                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-black px-6 py-3.5 h-auto rounded-2xl text-xs uppercase tracking-widest cursor-pointer shadow-lg shadow-kurima-orange/5"
-                  >
-                    {t('search.btn', 'Search')}
-                  </Button>
                 </div>
-                
-                {/* Trending searches */}
-                <div className="flex items-center gap-3 mt-4 flex-wrap">
-                  <span className="text-[10px] font-black uppercase text-kurima-muted tracking-widest">{t('search.trending', 'Trending Searches:')}</span>
-                  {[
-                    { key: 'breakers', defaultVal: 'Smart Breakers' },
-                    { key: 'monitors', defaultVal: 'Energy Monitors' },
-                    { key: 'cables', defaultVal: 'Copper Cables' },
-                    { key: 'switches', defaultVal: 'Double Switches' }
-                  ].map((item) => {
-                    const term = t(`search.${item.key}`, item.defaultVal)
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => setSearchQuery(term)}
-                        className="text-[10px] font-bold text-foreground/75 hover:text-kurima-orange bg-foreground/[0.03] hover:bg-kurima-orange/5 border border-border/40 hover:border-kurima-orange/30 px-3 py-1 rounded-full transition-all cursor-pointer"
-                      >
-                        {term}
-                      </button>
-                    )
-                  })}
-                </div>
+
+                {/* Autocomplete Search Results List */}
+                {searchQuery && (
+                  <div className="mt-4 border-t border-border/40 pt-4">
+                    <div className="text-[10px] font-black uppercase text-kurima-muted tracking-widest mb-3">
+                      {matchedProducts.length > 0 ? t('search.results', 'Search Results') : t('search.noResults', 'No Results Found')}
+                    </div>
+                    {matchedProducts.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+                        {matchedProducts.map((p) => (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setSearchQuery('')
+                              setIsSearchOpen(false)
+                              navigate(`/product/${p.id}`)
+                            }}
+                            className="flex items-center gap-4 p-3 rounded-2xl bg-foreground/[0.02] hover:bg-kurima-orange/5 border border-border/30 hover:border-kurima-orange/20 transition-all cursor-pointer group"
+                          >
+                            <div className="w-12 h-12 rounded-xl overflow-hidden bg-foreground/10 flex-shrink-0 border border-border/40">
+                              <img src={p.image || '/p1.jpg'} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <span className="text-[10px] font-bold text-kurima-orange uppercase tracking-wider block mb-0.5">
+                                {typeof p.brand === 'object' && p.brand !== null ? p.brand.name : p.brand}
+                              </span>
+                              <h4 className="text-xs font-bold text-foreground truncate group-hover:text-kurima-orange transition-colors">
+                                {p.name}
+                              </h4>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="text-xs font-black text-foreground">{p.price} DA</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-foreground/50 py-2">
+                        {t('search.noResultsDesc', 'No products match your search query. Try typing something else!')}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -711,7 +744,7 @@ function Navbar() {
                             key={idx}
                             onClick={() => {
                               setIsBrandsMegaOpen(false)
-                              navigate(`/product/${item.id}`)
+                              navigate(`/shop?brand=${encodeURIComponent(item.brandName)}&gamme=${encodeURIComponent(item.name)}`)
                             }}
                             className="flex flex-col items-center group cursor-pointer"
                           >
@@ -721,17 +754,6 @@ function Navbar() {
                                 alt={item.name}
                                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                               />
-                              {item.tag && (
-                                <span
-                                  className={`absolute -top-1 -right-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full flex items-center gap-0.5 shadow-md ${
-                                    item.tag === 'hot'
-                                      ? 'bg-red-500 text-white animate-pulse'
-                                      : 'bg-kurima-orange text-black font-extrabold'
-                                  }`}
-                                >
-                                  {item.tag === 'hot' ? '🔥' : '✨'}
-                                </span>
-                              )}
                             </div>
                             <span className="text-xs font-bold text-foreground/80 group-hover:text-kurima-orange transition-colors uppercase tracking-wider text-center max-w-[120px] line-clamp-2">
                               {item.name}
@@ -841,7 +863,7 @@ function Navbar() {
                                             key={idx}
                                             onClick={() => {
                                               setMobileOpen(false)
-                                              navigate(`/product/${sub.id}`)
+                                              navigate(`/shop?brand=${encodeURIComponent(sub.brandName)}&gamme=${encodeURIComponent(sub.name)}`)
                                             }}
                                             className="flex flex-col items-start gap-1 p-3 rounded-xl bg-foreground/[0.03] active:bg-foreground/[0.07] border border-border/40 cursor-pointer transition-all duration-200"
                                           >
@@ -1000,7 +1022,8 @@ function Navbar() {
 }
 
 function HeroSection() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
   const slides = getHeroSlides(t)
   const [current, setCurrent] = useState(0)
 
@@ -1038,9 +1061,9 @@ function HeroSection() {
       </AnimatePresence>
 
       {/* Content */}
-      <div className="absolute inset-0 flex items-center">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
-          <div className="max-w-2xl">
+      <div className="absolute inset-0 flex items-center" dir={i18n.language === 'ar' ? 'rtl' : 'ltr'}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex justify-start">
+          <div className="max-w-2xl flex flex-col items-start text-start">
             <AnimatePresence mode="wait">
               <motion.div
                 key={current}
@@ -1048,6 +1071,7 @@ function HeroSection() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -30 }}
                 transition={{ duration: 0.8, ease: 'easeOut' }}
+                className="flex flex-col items-start"
               >
                 <motion.div
                   initial={{ width: 0 }}
@@ -1061,20 +1085,29 @@ function HeroSection() {
                 <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-foreground leading-[1.1] mb-8 whitespace-pre-line">
                   {slide.title}
                 </h1>
-                <div className="flex flex-col sm:flex-row gap-4" dir="ltr">
+                <div className="flex flex-col sm:flex-row gap-4 w-full justify-start">
                   <Button
                     size="lg"
-                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-bold px-8 py-6 text-base rounded-full animate-pulse-orange group"
+                    onClick={() => navigate('/shop')}
+                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-bold px-8 py-6 text-base rounded-full animate-pulse-orange group cursor-pointer flex items-center justify-center gap-2"
                   >
                     {slide.cta}
-                    <ArrowRight className="ml-2 w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform rtl:rotate-180" />
                   </Button>
                   <Button
                     size="lg"
                     variant="outline"
-                    className="border-border text-foreground hover:bg-foreground/10 font-semibold px-8 py-6 text-base rounded-full"
+                    onClick={() => {
+                      const el = document.getElementById('categories')
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth' })
+                      } else {
+                        navigate('/shop')
+                      }
+                    }}
+                    className="border-border text-foreground hover:bg-foreground/10 font-semibold px-8 py-6 text-base rounded-full cursor-pointer"
                   >
-                    Watch Lookbook
+                    {t('nav.categories', 'Categories')}
                   </Button>
                 </div>
               </motion.div>
@@ -1168,9 +1201,51 @@ function MarqueeBanner() {
 function ProductCard({ product, index }) {
   const { t } = useTranslation()
   const [hovered, setHovered] = useState(false)
-  const [liked, setLiked] = useState(false)
+  const [liked, setLiked] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      return favs.includes(Number(product.id))
+    } catch (e) {
+      return false
+    }
+  })
   const navigate = useNavigate()
   const { addToCart } = useCart()
+
+  // Keep state in sync with localStorage updates
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+        setLiked(favs.includes(Number(product.id)))
+      } catch (e) {
+        setLiked(false)
+      }
+    }
+    handleStorageChange()
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [product.id])
+
+  const toggleLike = (e) => {
+    e.stopPropagation()
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      const numId = Number(product.id)
+      let nextFavs
+      if (favs.includes(numId)) {
+        nextFavs = favs.filter(x => x !== numId)
+        setLiked(false)
+      } else {
+        nextFavs = [...favs, numId]
+        setLiked(true)
+      }
+      localStorage.setItem('kurama_favorites', JSON.stringify(nextFavs))
+      window.dispatchEvent(new Event('storage'))
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   return (
     <motion.div
@@ -1209,11 +1284,8 @@ function ProductCard({ product, index }) {
         </Badge>
         {/* Like button */}
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setLiked(!liked)
-          }}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-red-500 transition-colors"
+          onClick={toggleLike}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-red-500 transition-colors cursor-pointer"
         >
           <Heart className={`w-4 h-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
         </button>
@@ -1226,7 +1298,7 @@ function ProductCard({ product, index }) {
           <Button 
             onClick={(e) => {
               e.stopPropagation()
-              addToCart(product, 1)
+              addToCart(product)
             }}
             className="flex-1 bg-white text-black hover:bg-kurima-orange hover:text-black font-semibold rounded-full py-5 text-sm"
           >
@@ -1235,6 +1307,10 @@ function ProductCard({ product, index }) {
           </Button>
           <Button
             size="icon"
+            onClick={(e) => {
+              e.stopPropagation()
+              navigate(`/product/${product.id}`)
+            }}
             className="bg-white/10 backdrop-blur-sm text-white hover:bg-kurima-orange rounded-full w-10 h-10"
           >
             <Eye className="w-4 h-4" />
@@ -1289,7 +1365,7 @@ function BrandsSection() {
   const brandsList = dbBrands.length > 0 ? dbBrands : brands
 
   return (
-    <section className="py-12 bg-kurima-black  overflow-hidden">
+    <section id="brands" className="py-12 bg-kurima-black  overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
         <div className="flex items-center gap-4">
           <div className="h-[1px] flex-1 bg-white/5" />
@@ -1317,6 +1393,7 @@ function BrandsSection() {
 
 function FeaturedProducts() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -1341,6 +1418,15 @@ function FeaturedProducts() {
 
   return (
     <section id="new" className="py-20 sm:py-28">
+      <style>{`
+        .scrollbar-none::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-none {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-12">
@@ -1360,20 +1446,33 @@ function FeaturedProducts() {
           </div>
           <Button
             variant="outline"
-            className="border-white/10 text-white hover:border-kurima-orange hover:text-kurima-orange rounded-full px-6 self-start sm:self-auto"
+            className="border-white/10 text-white hover:border-kurima-orange hover:text-kurima-orange rounded-full px-6 hidden sm:inline-flex"
             asChild
           >
             <Link to="/shop">
-              View All <ArrowRight className="ml-2 w-4 h-4" />
+              {t('product.viewAll', 'View All')} <ArrowRight className="ml-2 w-4 h-4" />
             </Link>
           </Button>
         </div>
 
-        {/* Products Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-          {products.map((product, i) => (
-            <ProductCard key={product.id} product={product} index={i} />
+        {/* Products Grid / Mobile Slider */}
+        <div className="flex overflow-x-auto md:grid md:grid-cols-4 gap-4 sm:gap-6 snap-x snap-mandatory scrollbar-none pb-5 md:pb-0">
+          {products.slice(0, 4).map((product, i) => (
+            <div key={product.id} className="w-[80vw] xs:w-[70vw] sm:w-[50vw] md:w-auto shrink-0 snap-start">
+              <ProductCard product={product} index={i} />
+            </div>
           ))}
+        </div>
+
+        {/* Centered See More Button */}
+        <div className="flex justify-center mt-12">
+          <Button
+            onClick={() => navigate('/shop')}
+            className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-black px-10 py-5 rounded-full text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-kurima-orange/10 group transition-all duration-300"
+          >
+            {t('sections.seeMore', 'See More')}
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform rtl:rotate-180" />
+          </Button>
         </div>
       </div>
     </section>
@@ -1382,34 +1481,25 @@ function FeaturedProducts() {
 
 function CollectionsSection() {
   const { t } = useTranslation()
-  const [gammes, setGammes] = useState([])
+  const [categories, setCategories] = useState([])
   const navigate = useNavigate()
 
   useEffect(() => {
-    const loadGammes = async () => {
+    const loadCategories = async () => {
       try {
-        const data = await api.getGammes()
-        setGammes(data)
+        const data = await api.getCategories()
+        setCategories(data)
       } catch (err) {
-        console.error('Error loading gammes:', err)
+        console.error('Error loading categories:', err)
       }
     }
-    loadGammes()
+    loadCategories()
   }, [])
 
-  if (gammes.length === 0) return null
-
-  // Fallback image map for gammes
-  const getGammeImage = (name) => {
-    const normalized = name.toLowerCase()
-    if (normalized.includes('pro')) return '/p1.jpg'
-    if (normalized.includes('classic')) return '/p2.jpg'
-    if (normalized.includes('elite')) return '/p3.jpg'
-    return '/p4.jpg'
-  }
+  if (categories.length === 0) return null
 
   return (
-    <section id="collections" className="py-20 sm:py-28 bg-kurima-dark">
+    <section id="categories" className="py-20 sm:py-28 bg-kurima-dark">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-14">
           <motion.div
@@ -1427,15 +1517,15 @@ function CollectionsSection() {
         </div>
 
         <MotionCarousel
-          items={gammes}
+          items={categories}
           options={{ loop: true, align: 'center' }}
           renderSlide={(col) => (
             <motion.div
-              onClick={() => navigate(`/shop?gamme=${col.name}`)}
+              onClick={() => navigate(`/shop?category=${col.name}`)}
               className="group relative h-full w-full rounded-3xl overflow-hidden cursor-pointer"
             >
               <img
-                src={col.image || getGammeImage(col.name)}
+                src={col.image || '/c1.jpg'}
                 alt={col.name}
                 className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
               />
@@ -1443,11 +1533,17 @@ function CollectionsSection() {
               <div className="absolute inset-0 bg-kurima-orange/0 group-hover:bg-kurima-orange/10 transition-colors duration-500" />
               <div className="absolute bottom-8 left-8 right-8 text-left rtl:text-right" dir="auto">
                 <Badge className="bg-kurima-orange text-black font-semibold mb-3">
-                  {col.brand?.name || 'Exclusive'}
+                  {col.parentCategory || 'Electrical Equipment'}
                 </Badge>
-                <h3 className="text-2xl sm:text-3xl font-black text-foreground mb-2">{col.name} Series</h3>
+                <h3 className="text-2xl sm:text-3xl font-black text-foreground mb-2">
+                  {t(`shop.${col.name}`, col.name.charAt(0).toUpperCase() + col.name.slice(1))}
+                </h3>
                 <p className="text-foreground/70 text-sm sm:text-base mb-4 max-w-sm">
-                  Explore high-performance {col.category?.name || 'electrical'} equipment from {col.brand?.name || 'leading brand'}.
+                  {col.name === 'distribution' ? t('collectionsData.essentialsDesc') : 
+                   col.name === 'smart' ? t('collectionsData.modernistDesc') : 
+                   col.name === 'cabling' ? t('collectionsData.enduringDesc') : 
+                   col.name === 'renewable' ? 'High efficiency energy solutions for industrial and residential systems.' : 
+                   `Explore high-performance ${col.name} products and equipment.`}
                 </p>
                 <div className="flex items-center gap-2 text-kurima-orange font-semibold text-sm group-hover:gap-3 transition-all">
                   {t('product.shopCollection')} <ArrowRight className="w-4 h-4" />

@@ -11,7 +11,8 @@ import {
   ChevronRight, 
   Trash2,
   AlertTriangle,
-  Info
+  Info,
+  Search
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -62,6 +63,7 @@ export default function ComparePage() {
 
   const [activeSlot, setActiveSlot] = useState(null) // 'p1' or 'p2' to indicate which slot is choosing a product
   const [isSelectorOpen, setIsSelectorOpen] = useState(false)
+  const [selectorSearchQuery, setSelectorSearchQuery] = useState('')
 
   // Scroll to top on mount
   useEffect(() => {
@@ -82,6 +84,7 @@ export default function ComparePage() {
     }
     setIsSelectorOpen(false)
     setActiveSlot(null)
+    setSelectorSearchQuery('')
   }
 
   const handleRemoveProduct = (slot) => {
@@ -94,6 +97,7 @@ export default function ComparePage() {
 
   const openSelector = (slot) => {
     setActiveSlot(slot)
+    setSelectorSearchQuery('')
     setIsSelectorOpen(true)
   }
 
@@ -102,6 +106,16 @@ export default function ComparePage() {
     if (activeSlot === 'p1') return p.id !== p2Id
     if (activeSlot === 'p2') return p.id !== p1Id
     return true
+  })
+
+  const searchedAvailableProducts = availableProducts.filter(p => {
+    const q = selectorSearchQuery.toLowerCase().trim()
+    if (!q) return true
+    return (
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.brand && p.brand.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q))
+    )
   })
 
   // Format pricing
@@ -183,7 +197,7 @@ export default function ComparePage() {
                   
                   {/* Pricing Comparison */}
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">Pricing</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">{t('compare.pricing', 'Pricing')}</span>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-black text-kurima-orange">{formatPrice(product1.price)} DA</span>
                       {product1.originalPrice && (
@@ -192,14 +206,14 @@ export default function ComparePage() {
                     </div>
                     {product1.originalPrice && (
                       <span className="text-[10px] text-green-500 font-bold">
-                        Save {Math.round(((product1.originalPrice - product1.price) / product1.originalPrice) * 100)}%
+                        {t('compare.save', 'Save')} {Math.round(((product1.originalPrice - product1.price) / product1.originalPrice) * 100)}%
                       </span>
                     )}
                   </div>
 
                   {/* Rating */}
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">Customer Satisfaction</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">{t('compare.satisfaction', 'Customer Satisfaction')}</span>
                     <div className="flex items-center gap-1.5">
                       <div className="flex items-center text-kurima-orange">
                         <Star className="w-4 h-4 fill-current" />
@@ -212,7 +226,7 @@ export default function ComparePage() {
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-green-500 block mb-2 flex items-center gap-1">
                       <Check className="w-3.5 h-3.5 text-green-500" />
-                      Positives (Pros)
+                      {t('compare.positives', 'Positives (Pros)')}
                     </span>
                     <ul className="space-y-2">
                       {product1.positives?.map((pos, i) => (
@@ -228,7 +242,7 @@ export default function ComparePage() {
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 block mb-2 flex items-center gap-1">
                       <X className="w-3.5 h-3.5 text-red-500" />
-                      Negatives (Cons)
+                      {t('compare.negatives', 'Negatives (Cons)')}
                     </span>
                     <ul className="space-y-2">
                       {product1.negatives?.map((neg, i) => (
@@ -244,7 +258,7 @@ export default function ComparePage() {
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-2 flex items-center gap-1">
                       <Info className="w-3.5 h-3.5 text-kurima-orange" />
-                      Key Specifications
+                      {t('compare.specs', 'Key Specifications')}
                     </span>
                     <ul className="space-y-1.5 bg-background/40 border border-foreground/5 p-3.5 rounded-2xl">
                       {product1.details?.map((detail, i) => (
@@ -270,7 +284,7 @@ export default function ComparePage() {
                     onClick={() => navigate(`/product/${product1.id}`)}
                     className="border-white/10 hover:border-kurima-orange hover:bg-foreground/5 text-foreground rounded-full px-5 text-xs font-bold"
                   >
-                    Details
+                    {t('compare.details', 'Details')}
                   </Button>
                 </div>
               </motion.div>
@@ -282,9 +296,9 @@ export default function ComparePage() {
                 <div className="w-16 h-16 rounded-full bg-foreground/5 group-hover:bg-kurima-orange/10 group-hover:scale-105 transition-all flex items-center justify-center text-foreground/40 group-hover:text-kurima-orange mb-6 border border-border">
                   <Plus className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-black text-foreground mb-2 uppercase tracking-wide">Add Product 1</h3>
+                <h3 className="text-lg font-black text-foreground mb-2 uppercase tracking-wide">{t('compare.addProduct1', 'Add Product 1')}</h3>
                 <p className="text-xs text-kurima-muted max-w-xs leading-relaxed">
-                  Click to select an electrical device or automation solution to configure slot 1.
+                  {t('compare.descSlot1', 'Click to select an electrical device or automation solution to configure slot 1.')}
                 </p>
               </div>
             )}
@@ -330,7 +344,7 @@ export default function ComparePage() {
                   
                   {/* Pricing Comparison */}
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">Pricing</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">{t('compare.pricing', 'Pricing')}</span>
                     <div className="flex items-baseline gap-2">
                       <span className="text-2xl font-black text-kurima-orange">{formatPrice(product2.price)} DA</span>
                       {product2.originalPrice && (
@@ -339,14 +353,14 @@ export default function ComparePage() {
                     </div>
                     {product2.originalPrice && (
                       <span className="text-[10px] text-green-500 font-bold">
-                        Save {Math.round(((product2.originalPrice - product2.price) / product2.originalPrice) * 100)}%
+                        {t('compare.save', 'Save')} {Math.round(((product2.originalPrice - product2.price) / product2.originalPrice) * 100)}%
                       </span>
                     )}
                   </div>
 
                   {/* Rating */}
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">Customer Satisfaction</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-1">{t('compare.satisfaction', 'Customer Satisfaction')}</span>
                     <div className="flex items-center gap-1.5">
                       <div className="flex items-center text-kurima-orange">
                         <Star className="w-4 h-4 fill-current" />
@@ -359,7 +373,7 @@ export default function ComparePage() {
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-green-500 block mb-2 flex items-center gap-1">
                       <Check className="w-3.5 h-3.5 text-green-500" />
-                      Positives (Pros)
+                      {t('compare.positives', 'Positives (Pros)')}
                     </span>
                     <ul className="space-y-2">
                       {product2.positives?.map((pos, i) => (
@@ -375,7 +389,7 @@ export default function ComparePage() {
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-red-500 block mb-2 flex items-center gap-1">
                       <X className="w-3.5 h-3.5 text-red-500" />
-                      Negatives (Cons)
+                      {t('compare.negatives', 'Negatives (Cons)')}
                     </span>
                     <ul className="space-y-2">
                       {product2.negatives?.map((neg, i) => (
@@ -391,7 +405,7 @@ export default function ComparePage() {
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted block mb-2 flex items-center gap-1">
                       <Info className="w-3.5 h-3.5 text-kurima-orange" />
-                      Key Specifications
+                      {t('compare.specs', 'Key Specifications')}
                     </span>
                     <ul className="space-y-1.5 bg-background/40 border border-foreground/5 p-3.5 rounded-2xl">
                       {product2.details?.map((detail, i) => (
@@ -417,7 +431,7 @@ export default function ComparePage() {
                     onClick={() => navigate(`/product/${product2.id}`)}
                     className="border-white/10 hover:border-kurima-orange hover:bg-foreground/5 text-foreground rounded-full px-5 text-xs font-bold"
                   >
-                    Details
+                    {t('compare.details', 'Details')}
                   </Button>
                 </div>
               </motion.div>
@@ -429,9 +443,9 @@ export default function ComparePage() {
                 <div className="w-16 h-16 rounded-full bg-foreground/5 group-hover:bg-kurima-orange/10 group-hover:scale-105 transition-all flex items-center justify-center text-foreground/40 group-hover:text-kurima-orange mb-6 border border-border">
                   <Plus className="w-8 h-8" />
                 </div>
-                <h3 className="text-lg font-black text-foreground mb-2 uppercase tracking-wide">Add Product 2</h3>
+                <h3 className="text-lg font-black text-foreground mb-2 uppercase tracking-wide">{t('compare.addProduct2', 'Add Product 2')}</h3>
                 <p className="text-xs text-kurima-muted max-w-xs leading-relaxed">
-                  Click to select an electrical device or automation solution to configure slot 2.
+                  {t('compare.descSlot2', 'Click to select an electrical device or automation solution to configure slot 2.')}
                 </p>
               </div>
             )}
@@ -452,6 +466,7 @@ export default function ComparePage() {
               onClick={() => {
                 setIsSelectorOpen(false)
                 setActiveSlot(null)
+                setSelectorSearchQuery('')
               }}
               className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm"
             />
@@ -467,16 +482,17 @@ export default function ComparePage() {
                 <div>
                   <h3 className="text-xl font-black uppercase tracking-tight text-foreground flex items-center gap-2">
                     <Plus className="w-5 h-5 text-kurima-orange" />
-                    Select Solution
+                    {t('compare.selectSolution', 'Select Solution')}
                   </h3>
                   <p className="text-xs text-kurima-muted mt-1">
-                    Choose from our catalog to compare parameters.
+                    {t('compare.chooseCatalog', 'Choose from our catalog to compare parameters.')}
                   </p>
                 </div>
-                <button
+                 <button
                   onClick={() => {
                     setIsSelectorOpen(false)
                     setActiveSlot(null)
+                    setSelectorSearchQuery('')
                   }}
                   className="p-2 rounded-full hover:bg-foreground/5 text-foreground/45 hover:text-foreground transition-colors cursor-pointer"
                 >
@@ -484,14 +500,40 @@ export default function ComparePage() {
                 </button>
               </div>
 
+              {availableProducts.length > 0 && (
+                <div className="relative mb-5 shrink-0">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={selectorSearchQuery}
+                    onChange={(e) => setSelectorSearchQuery(e.target.value)}
+                    placeholder={t('search.placeholder', 'Search products...')}
+                    className="w-full pl-10 pr-9 py-2.5 bg-foreground/[0.02] border border-foreground/10 rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/30 focus:outline-none focus:border-kurima-orange transition-all"
+                  />
+                  {selectorSearchQuery && (
+                    <button
+                      onClick={() => setSelectorSearchQuery('')}
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-foreground/5 text-foreground/40 hover:text-foreground transition-colors"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              )}
+
               {availableProducts.length === 0 ? (
                 <div className="text-center py-12 text-kurima-muted">
                   <AlertTriangle className="w-8 h-8 text-kurima-orange mx-auto mb-4" />
-                  <p className="text-sm font-semibold">No other products available for comparison.</p>
+                  <p className="text-sm font-semibold">{t('compare.noProducts', 'No other products available for comparison.')}</p>
+                </div>
+              ) : searchedAvailableProducts.length === 0 ? (
+                <div className="text-center py-12 text-kurima-muted">
+                  <Search className="w-8 h-8 text-kurima-orange mx-auto mb-4" />
+                  <p className="text-sm font-semibold">{t('shop.noMatchTitle', 'No Products Match')}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 overflow-y-auto pr-1">
-                  {availableProducts.map(product => (
+                  {searchedAvailableProducts.map(product => (
                     <div
                       key={product.id}
                       onClick={() => handleSelectProduct(product)}

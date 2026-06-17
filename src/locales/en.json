@@ -31,7 +31,8 @@
     "ourCollectionsSubtitle": "Comprehensive electrical hardware designed for maximum safety, grid efficiency, and smart monitoring.",
     "ourBrands": "OEM Partner Brands",
     "testimonials": "Trusted by Professional Engineers",
-    "testimonialsSubtitle": "Discover why thousands of electrical contractors, safety auditors, and grid utilities trust ElectroHub."
+    "testimonialsSubtitle": "Discover why thousands of electrical contractors, safety auditors, and grid utilities trust ElectroHub.",
+    "seeMore": "See More"
   },
   "product": {
     "addToCart": "Request Quote / Order",
@@ -151,7 +152,8 @@
     "warranty": "Secure Corporate Energy Procurement Warranty",
     "spec": "Spec: ",
     "enclosure": "Enclosure: ",
-    "eq": "Electrical Equipment"
+    "eq": "Electrical Equipment",
+    "downloadProforma": "Download Proforma (PDF)"
   },
   "productPage": {
     "reviews": "Reviews",
@@ -212,9 +214,8 @@
     "selectGamme": "Select Range",
     "allGammes": "All Ranges",
     "maxBudget": "Max Budget",
-    "inStockOnly": "In-Stock Only",
-    "inStockDesc": "Excludes out of stock items",
-    "hideBackorder": "Hide backordered products",
+    "favoritesOnly": "Favorites Only",
+    "favoritesDesc": "Show only liked products",
     "filterOptions": "Filter Options",
     "applyFilters": "Apply Active Filters",
     "noMatchTitle": "No Products Match",
@@ -269,5 +270,24 @@
     "confirmed": "Confirmed & Processing",
     "shipped": "Shipped & In Transit",
     "delivered": "Delivered"
+  },
+  "compare": {
+    "title": "Compare Products",
+    "heading": "Compare Solutions",
+    "subtitle": "Side-by-side analysis of product technical details, pricing, strengths, and drawbacks to help you engineer the perfect energy solution.",
+    "pricing": "Pricing",
+    "satisfaction": "Customer Satisfaction",
+    "positives": "Positives (Pros)",
+    "negatives": "Negatives (Cons)",
+    "specs": "Key Specifications",
+    "details": "Details",
+    "addProduct1": "Add Product 1",
+    "addProduct2": "Add Product 2",
+    "descSlot1": "Click to select an electrical device or automation solution to configure slot 1.",
+    "descSlot2": "Click to select an electrical device or automation solution to configure slot 2.",
+    "selectSolution": "Select Solution",
+    "chooseCatalog": "Choose from our catalog to compare parameters.",
+    "noProducts": "No other products available for comparison.",
+    "save": "Save"
   }
 }

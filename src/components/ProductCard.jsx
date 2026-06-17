@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { ShoppingBag } from 'lucide-react'
+import { ShoppingBag, Heart } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
 import { useCart } from '@/context/CartContext'
@@ -10,6 +10,49 @@ export default function ProductCard({ product, index }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addToCart } = useCart()
+  const [liked, setLiked] = useState(() => {
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      return favs.includes(Number(product.id))
+    } catch (e) {
+      return false
+    }
+  })
+
+  // Keep state in sync with localStorage updates
+  useEffect(() => {
+    const handleStorageChange = () => {
+      try {
+        const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+        setLiked(favs.includes(Number(product.id)))
+      } catch (e) {
+        setLiked(false)
+      }
+    }
+    handleStorageChange()
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [product.id])
+
+  const toggleLike = (e) => {
+    e.stopPropagation()
+    try {
+      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+      const numId = Number(product.id)
+      let nextFavs
+      if (favs.includes(numId)) {
+        nextFavs = favs.filter(x => x !== numId)
+        setLiked(false)
+      } else {
+        nextFavs = [...favs, numId]
+        setLiked(true)
+      }
+      localStorage.setItem('kurama_favorites', JSON.stringify(nextFavs))
+      window.dispatchEvent(new Event('storage'))
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   // Make sure price formatting is clean and safe
   const formattedPrice = typeof product.price === 'number' ? product.price.toLocaleString() : product.price
@@ -33,18 +76,12 @@ export default function ProductCard({ product, index }) {
           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
         />
         
-        {/* Basket button in the top right instead of wish list */}
+        {/* Wish list / Favorite button in the top right */}
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            if (product.inStock !== false) {
-              addToCart(product, 1)
-            }
-          }}
-          disabled={product.inStock === false}
-          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:bg-kurima-orange hover:text-black transition-all cursor-pointer disabled:opacity-40 disabled:hover:bg-black/40 disabled:hover:text-white/70"
+          onClick={toggleLike}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-red-500 transition-all cursor-pointer"
         >
-          <ShoppingBag className="w-4 h-4" />
+          <Heart className={`w-4 h-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} />
         </button>
 
         {!product.inStock && product.inStock !== undefined && (
@@ -96,12 +133,9 @@ export default function ProductCard({ product, index }) {
             size="sm"
             onClick={(e) => {
               e.stopPropagation()
-              if (product.inStock !== false) {
-                addToCart(product, 1)
-              }
+              navigate(`/product/${product.id}`)
             }}
-            disabled={product.inStock === false}
-            className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold rounded-full px-4 text-[10px] h-8 cursor-pointer transition-all active:scale-95 disabled:opacity-40"
+            className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold rounded-full px-4 text-[10px] h-8 cursor-pointer transition-all active:scale-95"
           >
             Buy
           </Button>

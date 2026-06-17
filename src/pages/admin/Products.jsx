@@ -24,6 +24,7 @@ export default function Products() {
   // Nested Tabs inside products page
   // 'productsList' | 'categories' | 'brands' | 'gammes'
   const [productTab, setProductTab] = useState('productsList')
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Database states
   const [products, setProducts] = useState([])
@@ -419,6 +420,18 @@ export default function Products() {
 
   const calculatedMargins = calcProductMargins()
 
+  const filteredProducts = products.filter(p => {
+    const q = searchQuery.toLowerCase().trim()
+    if (!q) return true
+    return (
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.ref && p.ref.toLowerCase().includes(q)) ||
+      (p.brand && p.brand.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q)) ||
+      (p.description && p.description.toLowerCase().includes(q))
+    )
+  })
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 15 }}
@@ -435,11 +448,14 @@ export default function Products() {
             { id: 'gammes', label: 'Gammes', count: gammes.length }
           ].map(tab => {
             const isActive = productTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setProductTab(tab.id)}
-                className={`pb-4 text-xs sm:text-sm font-black uppercase tracking-widest transition-all relative cursor-pointer ${
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setProductTab(tab.id)
+                    setSearchQuery('')
+                  }}
+                  className={`pb-4 text-xs sm:text-sm font-black uppercase tracking-widest transition-all relative cursor-pointer ${
                   isActive ? 'text-kurima-orange' : 'text-kurima-muted hover:text-foreground'
                 }`}
               >
@@ -486,6 +502,8 @@ export default function Products() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
               <input
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search products by title..."
                 className="w-full pl-10 pr-4 py-2.5 bg-foreground/[0.02] border border-border/80 rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/30 focus:outline-none focus:border-kurima-orange transition-all"
               />
@@ -509,7 +527,7 @@ export default function Products() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40 font-semibold text-foreground/80">
-                {products.map(p => {
+                {filteredProducts.map(p => {
                   const isLowStock = p.quantity <= 10
                   const isPromo = p.promotionPercentage > 0
                   const discountedPrice = Math.round(p.priceSold * (1 - p.promotionPercentage / 100))

@@ -18,7 +18,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useTranslation } from 'react-i18next'
 import { useCart } from '@/context/CartContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import ProductCard from '@/components/ProductCard'
 
 import api from '@/lib/api'
@@ -34,6 +34,7 @@ export default function ShopPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addToCart } = useCart()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // Dynamic filter options state
   const [dbCategories, setDbCategories] = useState([])
@@ -41,14 +42,37 @@ export default function ShopPage() {
   const [dbGammes, setDbGammes] = useState([])
 
   // State Management
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('all')
-  const [selectedBrand, setSelectedBrand] = useState('All Brands')
-  const [selectedGamme, setSelectedGamme] = useState('All Gammes')
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || '')
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get('category') || 'all')
+  const [selectedBrand, setSelectedBrand] = useState(() => searchParams.get('brand') || 'All Brands')
+  const [selectedGamme, setSelectedGamme] = useState(() => searchParams.get('gamme') || 'All Gammes')
   const [maxPrice, setMaxPrice] = useState(300000)
-  const [onlyInStock, setOnlyInStock] = useState(false)
+  const [onlyFavorites, setOnlyFavorites] = useState(false)
   const [sortBy, setSortBy] = useState('featured')
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+
+  // Sync state with URL params
+  useEffect(() => {
+    const search = searchParams.get('search') || ''
+    const category = searchParams.get('category') || 'all'
+    const brand = searchParams.get('brand') || 'All Brands'
+    const gamme = searchParams.get('gamme') || 'All Gammes'
+    
+    setSearchQuery(search)
+    setSelectedCategory(category)
+    setSelectedBrand(brand)
+    setSelectedGamme(gamme)
+  }, [searchParams])
+
+  // Update URL search parameters when filters change
+  useEffect(() => {
+    const newParams = {}
+    if (searchQuery) newParams.search = searchQuery
+    if (selectedCategory !== 'all') newParams.category = selectedCategory
+    if (selectedBrand !== 'All Brands') newParams.brand = selectedBrand
+    if (selectedGamme !== 'All Gammes') newParams.gamme = selectedGamme
+    setSearchParams(newParams, { replace: true })
+  }, [searchQuery, selectedCategory, selectedBrand, selectedGamme, setSearchParams])
 
   // Live Products State
   const [products, setProducts] = useState([])
@@ -76,9 +100,15 @@ export default function ShopPage() {
   }, [dbBrands])
 
   const gammesList = useMemo(() => {
-    const names = dbGammes.map(g => typeof g === 'string' ? g : (g?.name || ''))
+    const filtered = selectedBrand === 'All Brands'
+      ? dbGammes
+      : dbGammes.filter(g => {
+          const bName = typeof g.brand === 'object' && g.brand !== null ? g.brand.name : g.brand
+          return String(bName || '').toLowerCase() === selectedBrand.toLowerCase()
+        })
+    const names = filtered.map(g => typeof g === 'string' ? g : (g?.name || ''))
     return names.filter(Boolean)
-  }, [dbGammes])
+  }, [dbGammes, selectedBrand])
 
   const sortOptionsList = useMemo(() => [
     { id: 'featured', label: t('shop.sortFeatured', 'Featured & Best Match') },
@@ -119,16 +149,26 @@ export default function ShopPage() {
           brand: selectedBrand === 'All Brands' ? undefined : selectedBrand,
           gamme: selectedGamme === 'All Gammes' ? undefined : selectedGamme,
           maxPrice: maxPrice,
-          inStock: onlyInStock ? true : undefined,
           sort: sortBy
         }
         const data = await api.getProducts(queryParams)
         // Convert prices to numbers safely
-        const mappedData = data.map(p => ({
+        let mappedData = data.map(p => ({
           ...p,
           price: Number(p.price),
           originalPrice: p.originalPrice ? Number(p.originalPrice) : null
         }))
+
+        // Filter by favorites locally if onlyFavorites is true
+        if (onlyFavorites) {
+          try {
+            const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
+            mappedData = mappedData.filter(p => favs.includes(Number(p.id)))
+          } catch (e) {
+            console.error(e)
+          }
+        }
+
         setProducts(mappedData)
       } catch (err) {
         console.error('Error fetching products:', err)
@@ -142,14 +182,14 @@ export default function ShopPage() {
     }, 250) // debounce search inputs slightly
 
     return () => clearTimeout(delayDebounce)
-  }, [searchQuery, selectedCategory, selectedBrand, selectedGamme, maxPrice, onlyInStock, sortBy])
+  }, [searchQuery, selectedCategory, selectedBrand, selectedGamme, maxPrice, onlyFavorites, sortBy])
 
   // Reset selected gamme if the selected brand changes and the current gamme is not in the filtered gammes list
   useEffect(() => {
-    if (selectedGamme !== 'All Gammes' && !gammesList.includes(selectedGamme)) {
+    if (dbGammes.length > 0 && selectedGamme !== 'All Gammes' && !gammesList.includes(selectedGamme)) {
       setSelectedGamme('All Gammes')
     }
-  }, [selectedBrand, gammesList, selectedGamme])
+  }, [selectedBrand, gammesList, selectedGamme, dbGammes])
 
   // Clear filters helper
   const handleResetFilters = () => {
@@ -158,7 +198,7 @@ export default function ShopPage() {
     setSelectedBrand('All Brands')
     setSelectedGamme('All Gammes')
     setMaxPrice(300000)
-    setOnlyInStock(false)
+    setOnlyFavorites(false)
     setSortBy('featured')
   }
 
@@ -331,20 +371,20 @@ export default function ShopPage() {
 
             <Separator className="bg-foreground/10 my-6" />
 
-            {/* Toggle Availability */}
+            {/* Toggle Favorites */}
             <div className="flex justify-between items-center">
               <div>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.inStockOnly', 'In-Stock Only')}</h4>
-                <p className="text-[10px] text-foreground/45">{t('shop.inStockDesc', 'Excludes out of stock items')}</p>
+                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.favoritesOnly', 'Favorites Only')}</h4>
+                <p className="text-[10px] text-foreground/45">{t('shop.favoritesDesc', 'Show only liked products')}</p>
               </div>
               <button
-                onClick={() => setOnlyInStock(!onlyInStock)}
+                onClick={() => setOnlyFavorites(!onlyFavorites)}
                 className={`w-10 h-6 rounded-full p-1 transition-all ${
-                  onlyInStock ? 'bg-kurima-orange' : 'bg-foreground/10'
+                  onlyFavorites ? 'bg-kurima-orange' : 'bg-foreground/10'
                 }`}
               >
                 <div className={`w-4 h-4 rounded-full bg-black transition-all ${
-                  onlyInStock ? 'translate-x-4' : 'translate-x-0'
+                  onlyFavorites ? 'translate-x-4' : 'translate-x-0'
                 }`} />
               </button>
             </div>
@@ -541,20 +581,20 @@ export default function ShopPage() {
 
               <Separator className="bg-foreground/5 my-6" />
 
-              {/* Mobile Stock */}
+              {/* Mobile Favorites */}
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.inStockOnly', 'In-Stock Only')}</h4>
-                  <p className="text-[10px] text-foreground/45">{t('shop.hideBackorder', 'Hide backordered products')}</p>
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.favoritesOnly', 'Favorites Only')}</h4>
+                  <p className="text-[10px] text-foreground/45">{t('shop.favoritesDesc', 'Show only liked products')}</p>
                 </div>
                 <button
-                  onClick={() => setOnlyInStock(!onlyInStock)}
+                  onClick={() => setOnlyFavorites(!onlyFavorites)}
                   className={`w-10 h-6 rounded-full p-1 transition-all ${
-                    onlyInStock ? 'bg-kurima-orange' : 'bg-foreground/10'
+                    onlyFavorites ? 'bg-kurima-orange' : 'bg-foreground/10'
                   }`}
                 >
                   <div className={`w-4 h-4 rounded-full bg-black transition-all ${
-                    onlyInStock ? 'translate-x-4' : 'translate-x-0'
+                    onlyFavorites ? 'translate-x-4' : 'translate-x-0'
                   }`} />
                 </button>
               </div>

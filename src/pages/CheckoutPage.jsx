@@ -28,7 +28,8 @@ export default function CheckoutPage() {
   const { 
     cartItems, 
     cartTotal, 
-    clearCart 
+    clearCart,
+    updateCartItemSpecs
   } = useCart()
 
   const getWilayaName = (w) => {
@@ -536,22 +537,66 @@ export default function CheckoutPage() {
                     <div className="flex-1 min-w-0 flex flex-col justify-between text-left rtl:text-right">
                       <div>
                         <h4 className="font-bold text-xs text-foreground truncate">{item.name}</h4>
-                        <div className="flex gap-1.5 mt-1">
-                          {item.size && (
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {item.size && item.sizes && item.sizes.length > 0 ? (
+                            <div className="relative">
+                              <select
+                                value={item.size}
+                                onChange={(e) => updateCartItemSpecs(item.cartItemId, e.target.value, undefined)}
+                                className="text-[8px] font-black uppercase bg-foreground/5 hover:bg-foreground/10 text-foreground/55 px-1.5 py-0.5 pr-5 rounded border border-border/40 focus:outline-none focus:border-kurima-orange appearance-none cursor-pointer"
+                              >
+                                {item.sizes.map((s, idx) => {
+                                  const szName = typeof s === 'object' ? s.name : s
+                                  return (
+                                    <option key={idx} value={szName} className="bg-background text-foreground text-[10px]">
+                                      {szName}
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                              <ChevronDown className="w-2 h-2 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/50" />
+                            </div>
+                          ) : item.size ? (
                             <span className="text-[8px] font-black uppercase bg-foreground/5 text-foreground/55 px-1.5 py-0.5 rounded">
                               {item.size}
                             </span>
-                          )}
-                          {item.color && (
+                          ) : null}
+
+                          {item.color && item.colors && item.colors.length > 0 ? (
+                            <div className="relative">
+                              <select
+                                value={item.color}
+                                onChange={(e) => updateCartItemSpecs(item.cartItemId, undefined, e.target.value)}
+                                className="text-[8px] font-black uppercase bg-foreground/5 hover:bg-foreground/10 text-foreground/55 px-1.5 py-0.5 pr-5 rounded border border-border/40 focus:outline-none focus:border-kurima-orange appearance-none cursor-pointer"
+                              >
+                                {item.colors.map((c, idx) => {
+                                  const colName = typeof c === 'object' ? c.name : c
+                                  return (
+                                    <option key={idx} value={colName} className="bg-background text-foreground text-[10px]">
+                                      {colName}
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                              <ChevronDown className="w-2 h-2 absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/50" />
+                            </div>
+                          ) : item.color ? (
                             <span className="text-[8px] font-black uppercase bg-foreground/5 text-foreground/55 px-1.5 py-0.5 rounded">
                               {item.color}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex justify-between items-center text-xs mt-2">
                         <span className="text-kurima-muted">{t('cart.qty', 'Qty:')} {item.quantity}</span>
-                        <span className="font-black text-black dark:text-kurima-orange">{(item.price * item.quantity).toLocaleString()} DA</span>
+                        <div className="flex flex-col items-end">
+                          <span className="font-black text-black dark:text-kurima-orange">{(item.price * item.quantity).toLocaleString()} DA</span>
+                          {item.promotionPercentage > 0 && (
+                            <span className="text-[9px] text-kurima-muted line-through font-mono mt-0.5">
+                              {((item.priceOriginal || item.price) * item.quantity).toLocaleString()} DA
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

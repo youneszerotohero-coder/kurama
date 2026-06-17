@@ -31,7 +31,8 @@
     "ourCollectionsSubtitle": "Matériel électrique complet conçu pour une sécurité maximale, l'efficacité réseau et le contrôle intelligent.",
     "ourBrands": "Marques Partenaires OEM",
     "testimonials": "Approuvé par les Ingénieurs",
-    "testimonialsSubtitle": "Découvrez pourquoi des milliers d'électriciens, d'auditeurs de sécurité et d'entreprises font confiance à ElectroHub."
+    "testimonialsSubtitle": "Découvrez pourquoi des milliers d'électriciens, d'auditeurs de sécurité et d'entreprises font confiance à ElectroHub.",
+    "seeMore": "Voir Plus"
   },
   "product": {
     "addToCart": "Demander un Devis / Commander",
@@ -151,7 +152,8 @@
     "warranty": "Garantie de Sécurité d'Approvisionnement Énergétique des Entreprises",
     "spec": "Spécification : ",
     "enclosure": "Boîtier : ",
-    "eq": "Matériel Électrique"
+    "eq": "Matériel Électrique",
+    "downloadProforma": "Télécharger le Proforma (PDF)"
   },
   "productPage": {
     "reviews": "Avis",
@@ -212,9 +214,8 @@
     "selectGamme": "Sélectionner la Gamme",
     "allGammes": "Toutes les Gammes",
     "maxBudget": "Budget Maximum",
-    "inStockOnly": "En Stock Uniquement",
-    "inStockDesc": "Exclut les articles en rupture",
-    "hideBackorder": "Masquer les articles en rupture",
+    "favoritesOnly": "Favoris Uniquement",
+    "favoritesDesc": "Afficher uniquement les articles favoris",
     "filterOptions": "Options de Filtre",
     "applyFilters": "Appliquer les Filtres",
     "noMatchTitle": "Aucun Produit ne Correspond",
@@ -269,5 +270,24 @@
     "confirmed": "Confirmé & En préparation",
     "shipped": "Expédié & En transit",
     "delivered": "Livré"
+  },
+  "compare": {
+    "title": "Comparer les Produits",
+    "heading": "Comparer les Solutions",
+    "subtitle": "Analyse comparative des détails techniques des produits, des prix, des points forts et des inconvénients pour vous aider à concevoir la solution énergétique parfaite.",
+    "pricing": "Tarification",
+    "satisfaction": "Satisfaction Client",
+    "positives": "Positifs (Avantages)",
+    "negatives": "Négatifs (Inconvénients)",
+    "specs": "Spécifications Clés",
+    "details": "Détails",
+    "addProduct1": "Ajouter le Produit 1",
+    "addProduct2": "Ajouter le Produit 2",
+    "descSlot1": "Cliquez pour sélectionner un appareil électrique ou une solution d'automatisation pour configurer le logement 1.",
+    "descSlot2": "Cliquez pour sélectionner un appareil électrique ou une solution d'automatisation pour configurer le logement 2.",
+    "selectSolution": "Sélectionner une Solution",
+    "chooseCatalog": "Choisissez dans notre catalogue pour comparer les paramètres.",
+    "noProducts": "Aucun autre produit disponible pour la comparaison.",
+    "save": "Économisez"
   }
 }

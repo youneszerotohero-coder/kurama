@@ -42,7 +42,8 @@ export const updateOrderStatus = async (req, res, next) => {
 
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const stats = await orderService.getDashboardStats();
+    const { startDate, endDate } = req.query;
+    const stats = await orderService.getDashboardStats(startDate, endDate);
     return res.status(200).json(stats);
   } catch (error) {
     return res.status(400).json({ message: error.message });
