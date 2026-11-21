@@ -1,885 +1,635 @@
-import { useState, useEffect, useMemo } from 'react'
-import { useParams, Link, useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  ShoppingBag, 
-  ChevronRight, 
-  Star, 
-  Truck, 
-  Shield, 
-  RotateCcw, 
-  Heart, 
-  Share2, 
-  Plus, 
-  Minus,
-  Check,
-  ChevronDown,
-  User,
-  Phone,
-  MapPin,
-  Building,
-  Zap,
-  GitCompare,
-  FileText
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useCart } from '@/context/CartContext'
-import ProductCard from '@/components/ProductCard'
+import { Heart, Minus, Plus, Check, Truck, ShieldCheck, Banknote, Star, Share2, GitCompare, X, Zap, Loader2, ThumbsUp, ThumbsDown } from 'lucide-react'
 import api from '@/lib/api'
+import { useCart } from '@/context/CartContext'
+import { useStore } from '@/context/StoreContext'
+import { toggleFavorite, useIsFavorite } from '@/lib/favorites'
+import { setJsonLd, setSeo, absoluteUrl } from '@/lib/seo'
+import { TAG_KEYS, basePrice, categoryLabel, finalPrice, formatDA, promoOf, productImage, sizeName } from '@/lib/format'
+import Page, { SplitWords, useIntro } from '@/components/layout/Page'
+import ProductCard from '@/components/ProductCard'
+import { flyToCart } from '@/lib/flyToCart'
+import DeliveryFields, { useDelivery } from '@/components/DeliveryFields'
+import Btn, { cn } from '@/components/ui/Btn'
+import SectionHead from '@/pages/home/SectionHead'
+
+function Gallery({ images, name }) {
+  const [active, setActive] = useState(0)
+  const [zoom, setZoom] = useState(null)
+  const src = images[active] || images[0]
+
+  useEffect(() => setActive(0), [images])
+
+  return (
+    <div className="lg:sticky lg:top-6">
+      <div
+        className="relative aspect-square cursor-zoom-in overflow-hidden rounded-[1.5rem] bg-paper"
+        onMouseMove={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          setZoom({ x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 })
+        }}
+        onMouseLeave={() => setZoom(null)}
+      >
+        <img
+          key={src}
+          data-gallery-img
+          src={src}
+          alt={name}
+          width="900"
+          height="900"
+          fetchPriority="high"
+          decoding="async"
+          className="h-full w-full object-contain p-[8%] mix-blend-multiply transition-transform duration-300 ease-out"
+          style={zoom ? { transform: 'scale(1.9)', transformOrigin: `${zoom.x}% ${zoom.y}%` } : undefined}
+        />
+        <div className="pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0_0_0_1px_rgba(10,12,11,0.06)]" />
+      </div>
+      {images.length > 1 && (
+        <ul className="mt-3 grid grid-cols-5 gap-2">
+          {images.map((img, i) => (
+            <li key={img + i}>
+              <button
+                type="button"
+                onClick={() => setActive(i)}
+                aria-label={`${name} — ${i + 1}`}
+                aria-pressed={active === i}
+                className={cn(
+                  'block aspect-square w-full overflow-hidden rounded-xl bg-paper transition-[box-shadow,opacity] duration-300',
+                  active === i ? 'shadow-[0_0_0_2px_var(--color-volt)]' : 'opacity-60 hover:opacity-100',
+                )}
+              >
+                <img src={img} alt="" width="120" height="120" loading="lazy" className="h-full w-full object-contain p-1.5 mix-blend-multiply" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function Stars({ value = 5 }) {
+  return (
+    <span className="flex items-center gap-0.5" aria-label={`${value.toFixed(1)} / 5`}>
+      {Array.from({ length: 5 }, (_, i) => (
+        <Star key={i} className={cn('size-3.5', i < Math.round(value) ? 'fill-forest text-forest' : 'text-ink-900/50')} />
+      ))}
+    </span>
+  )
+}
+
+function DetailTabs({ product, details, positives, negatives }) {
+  const { t } = useTranslation()
+  const tabs = [
+    { id: 'desc', label: t('product.description') },
+    details.length > 0 && { id: 'specs', label: t('product.features') },
+    (positives.length > 0 || negatives.length > 0) && { id: 'pros', label: t('ui.prosCons', 'Points forts & limites') },
+    { id: 'delivery', label: t('ui.deliveryTab', 'Livraison & paiement') },
+  ].filter(Boolean)
+  const [tab, setTab] = useState('desc')
+
+  return (
+    <section aria-label={t('product.description')} className="mt-14 md:mt-20">
+      <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-ink-900/[0.08] no-scrollbar">
+        {tabs.map((x) => (
+          <button
+            key={x.id}
+            type="button"
+            role="tab"
+            id={`tab-${x.id}`}
+            aria-selected={tab === x.id}
+            aria-controls={`panel-${x.id}`}
+            onClick={() => setTab(x.id)}
+            className={cn('-mb-px shrink-0 border-b-2 px-4 py-3.5 text-[0.95rem] transition-colors', tab === x.id ? 'border-volt text-ink-900' : 'border-transparent text-ink-900/60 hover:text-ink-900')}
+          >
+            {x.label}
+          </button>
+        ))}
+      </div>
+
+      <div id={`panel-${tab}`} role="tabpanel" aria-labelledby={`tab-${tab}`} key={tab} className="animate-[toast-in_0.5s_var(--ease-out-expo)] py-8">
+        {tab === 'desc' && (
+          <p className="max-w-3xl text-[1.05rem] leading-[1.7] whitespace-pre-line text-ink-900/80">{product.description || t('ui.noDescription', 'La fiche détaillée de ce produit arrive bientôt.')}</p>
+        )}
+        {tab === 'specs' && (
+          <dl className="max-w-3xl divide-y divide-ink-900/[0.07] overflow-hidden rounded-2xl ring-hair">
+            {details.map((d, i) => {
+              const [k, ...v] = String(d).split(':')
+              return v.length ? (
+                <div key={i} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-4 px-5 py-3.5 odd:bg-ink-900/[0.025]">
+                  <dt className="text-ink-900/60">{k.trim()}</dt>
+                  <dd className="text-ink-900">{v.join(':').trim()}</dd>
+                </div>
+              ) : (
+                <div key={i} className="flex gap-3 px-5 py-3.5 text-ink-900/85 odd:bg-ink-900/[0.025]">
+                  <dt className="sr-only">{i + 1}</dt>
+                  <dd className="flex gap-3">
+                    <Check className="mt-0.5 size-4 shrink-0 text-forest" /> {d}
+                  </dd>
+                </div>
+              )
+            })}
+          </dl>
+        )}
+        {tab === 'pros' && (
+          <div className="grid max-w-4xl gap-4 sm:grid-cols-2">
+            {positives.length > 0 && (
+              <div className="rounded-2xl bg-volt/20 p-6 shadow-[inset_0_0_0_1px_rgba(154,240,126,0.2)]">
+                <p className="mb-4 flex items-center gap-2 text-forest">
+                  <ThumbsUp className="size-4" /> {t('compare.positives')}
+                </p>
+                <ul className="space-y-3 text-ink-900/85">
+                  {positives.map((x, i) => (
+                    <li key={i} className="flex gap-3">
+                      <Check className="mt-1 size-3.5 shrink-0 text-forest" /> {x}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {negatives.length > 0 && (
+              <div className="rounded-2xl bg-ink-900/[0.03] p-6 ring-hair">
+                <p className="mb-4 flex items-center gap-2 text-ink-900/65">
+                  <ThumbsDown className="size-4" /> {t('compare.negatives')}
+                </p>
+                <ul className="space-y-3 text-ink-900/70">
+                  {negatives.map((x, i) => (
+                    <li key={i} className="flex gap-3">
+                      <X className="mt-1 size-3.5 shrink-0 text-ink-900/65" /> {x}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
+        {tab === 'delivery' && (
+          <ul className="grid max-w-4xl gap-3 sm:grid-cols-3">
+            {[
+              [Truck, t('ui.r1', 'Livraison 58 wilayas'), t('ui.d1', 'À domicile ou en stop desk. Le tarif s’affiche dès que vous choisissez votre wilaya.')],
+              [Banknote, t('ui.r2', 'Paiement à la livraison'), t('ui.d2', 'Vous réglez en espèces à la réception, après vérification du colis.')],
+              [ShieldCheck, t('ui.r3', 'Garantie constructeur'), t('ui.d3', 'Produit neuf et d’origine. En cas de défaut, nous organisons l’échange.')],
+            ].map(([Icon, title, text]) => (
+              <li key={title} className="rounded-2xl bg-ink-900/[0.03] p-5 ring-hair">
+                <Icon className="size-5 text-forest" />
+                <p className="mt-3 text-ink-900">{title}</p>
+                <p className="mt-1 text-[0.9rem] leading-relaxed text-ink-900/60">{text}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  )
+}
 
 export default function ProductPage() {
   const { t } = useTranslation()
   const { id } = useParams()
-  const navigate = useNavigate()
-
+  const scope = useRef(null)
   const { addToCart } = useCart()
+  const { minFreeDelivery } = useStore()
+  const liked = useIsFavorite(id)
 
   const [product, setProduct] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [selectedImage, setSelectedImage] = useState(0)
-  const [selectedSize, setSelectedSize] = useState('')
-  const [selectedColor, setSelectedColor] = useState('')
-  const [quantity, setQuantity] = useState(1)
-  const [isLiked, setIsLiked] = useState(() => {
-    try {
-      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
-      return favs.includes(Number(id))
-    } catch (e) {
-      return false
-    }
-  })
+  const [related, setRelated] = useState([])
+  const [status, setStatus] = useState('loading')
+  const [size, setSize] = useState('')
+  const [color, setColor] = useState('')
+  const [qty, setQty] = useState(1)
+  const [express, setExpress] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [order, setOrder] = useState(null)
+  const [copied, setCopied] = useState(false)
 
-  const toggleLike = () => {
-    try {
-      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
-      const numId = Number(id)
-      let nextFavs
-      if (favs.includes(numId)) {
-        nextFavs = favs.filter(x => x !== numId)
-        setIsLiked(false)
-      } else {
-        nextFavs = [...favs, numId]
-        setIsLiked(true)
-      }
-      localStorage.setItem('kurama_favorites', JSON.stringify(nextFavs))
-    } catch (e) {
-      console.error(e)
-    }
-  }
-  const [relatedProducts, setRelatedProducts] = useState([])
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  useIntro(scope, [product?.id])
 
-  // Direct checkout states
-  const [orderForm, setOrderForm] = useState({
-    name: '',
-    phone: '',
-    wilaya: '',
-    commune: ''
-  })
-  const [formErrors, setFormErrors] = useState({
-    name: false,
-    phone: false,
-    wilaya: false,
-    commune: false,
-    submit: null
-  })
-  const [isOrderSuccess, setIsOrderSuccess] = useState(false)
-  const [territories, setTerritories] = useState([])
-  const [shippingType, setShippingType] = useState('home') // 'home' or 'desk'
-  const [minFreeDelivery, setMinFreeDelivery] = useState(15000)
-
-  // Fetch settings, territories & pre-fill profile details
   useEffect(() => {
-    const loadSettingsAndProfile = async () => {
-      try {
-        const [settings, territoriesData] = await Promise.all([
-          api.getPublicSettings().catch(() => ({})),
-          api.getTerritories().catch(() => [])
-        ])
-
-        if (settings && settings.minFreeDelivery !== undefined) {
-          setMinFreeDelivery(Number(settings.minFreeDelivery));
-        }
-
-        const rawTerritories = territoriesData.data || territoriesData || []
-        setTerritories(rawTerritories)
-      } catch (err) {
-        console.error('Failed to fetch settings/territories:', err)
-      }
-
-      const storedUser = localStorage.getItem('currentUser')
-      if (storedUser) {
-        try {
-          const u = JSON.parse(storedUser)
-          setOrderForm({
-            name: u.name || u.fullName || '',
-            phone: u.phone || '',
-            wilaya: u.wilaya || '',
-            commune: u.commune || ''
-          })
-        } catch (e) {
-          console.error(e)
-        }
-      }
+    let alive = true
+    setStatus('loading')
+    api
+      .getProduct(id)
+      .then(async (p) => {
+        if (!alive) return
+        setProduct(p)
+        setSize(sizeName(p.sizes?.[0]) || '')
+        setColor(p.colors?.[0]?.name || '')
+        setQty(1)
+        setStatus('ready')
+        const rel = await api.getProducts({ category: p.category, limit: 8 }).catch(() => [])
+        if (alive) setRelated((rel || []).filter((r) => r.id !== p.id).slice(0, 4))
+      })
+      .catch(() => alive && setStatus('missing'))
+    return () => {
+      alive = false
     }
-
-    loadSettingsAndProfile()
-  }, [])
-
-  // Fetch product detail and related products on mount or ID change
-  useEffect(() => {
-    window.scrollTo(0, 0)
-    try {
-      const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
-      setIsLiked(favs.includes(Number(id)))
-    } catch (e) {
-      setIsLiked(false)
-    }
-    
-    const loadProductData = async () => {
-      setLoading(true)
-      try {
-        const data = await api.getProduct(id)
-        
-        const mapped = {
-          ...data,
-          price: Number(data.priceSold),
-          originalPrice: data.originalPrice ? Number(data.originalPrice) : null,
-          category: data.category?.name || data.category,
-          brand: data.brand?.name || data.brand,
-          gamme: data.gamme?.name || data.gamme,
-          colors: Array.isArray(data.colors) ? data.colors : [{ name: 'Default', hex: '#FFFFFF' }],
-          sizes: Array.isArray(data.sizes) ? data.sizes : ['Standard'],
-          images: Array.isArray(data.images) && data.images.length ? data.images : [data.image || '/p1.jpg'],
-          details: Array.isArray(data.details) ? data.details : []
-        }
-
-        setProduct(mapped)
-        setSelectedImage(0)
-        setSelectedSize(mapped.sizes[0] || 'Standard')
-        setSelectedColor(mapped.colors[0]?.name || 'Default')
-        setQuantity(1)
-
-        // Fetch related products (e.g. products in same category)
-        const related = await api.getProducts({ category: mapped.category })
-        const mappedRelated = related
-          .filter(p => p.id !== mapped.id)
-          .slice(0, 4)
-          .map(p => ({
-            ...p,
-            price: Number(p.priceSold),
-            originalPrice: p.originalPrice ? Number(p.originalPrice) : null,
-            category: p.category?.name || p.category,
-            brand: p.brand?.name || p.brand,
-            gamme: p.gamme?.name || p.gamme
-          }))
-        setRelatedProducts(mappedRelated)
-      } catch (err) {
-        console.error('Error fetching product detail:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadProductData()
   }, [id])
 
-  // Compute specification-specific pricing
-  let basePrice = product ? product.price : 0
-  let originalPrice = product ? product.originalPrice : null
+  const price = product ? finalPrice(product, size) : 0
+  const original = product && promoOf(product) > 0 ? basePrice(product, size) : null
+  const subtotal = price * qty
+  const delivery = useDelivery(subtotal, minFreeDelivery)
+  const out = product && (product.inStock === false || Number(product.quantity) <= 0)
+  const lowStock = product && !out && Number(product.quantity) <= 5
+  const images = useMemo(() => {
+    if (!product) return []
+    const list = Array.isArray(product.images) && product.images.length ? product.images : [productImage(product)]
+    return [...new Set([product.image, ...list].filter(Boolean))]
+  }, [product])
 
-  if (product && Array.isArray(product.sizes) && selectedSize) {
-    const matchedSize = product.sizes.find(s => s && (s.name === selectedSize || s === selectedSize))
-    if (matchedSize && typeof matchedSize === 'object' && matchedSize.priceSold !== undefined) {
-      const promoMultiplier = 1 - (Number(product.promotionPercentage || 0) / 100)
-      basePrice = Number(matchedSize.priceSold) * promoMultiplier
-      if (Number(product.promotionPercentage || 0) > 0) {
-        originalPrice = Number(matchedSize.priceSold)
-      }
-    }
+  // SEO: title, description, Product structured data
+  useEffect(() => {
+    if (!product) return
+    setSeo({
+      title: product.name,
+      description: product.description || `${product.name} — ${product.brand || ''} ${categoryLabel(t, product.category)}`,
+      image: product.image,
+      type: 'product',
+    })
+    setJsonLd('ld-product', {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      sku: product.ref,
+      mpn: product.ref,
+      image: images.map(absoluteUrl),
+      description: product.description,
+      category: product.category,
+      brand: product.brand ? { '@type': 'Brand', name: product.brand } : undefined,
+      offers: {
+        '@type': 'Offer',
+        url: window.location.href,
+        priceCurrency: 'DZD',
+        price: finalPrice(product).toFixed(2),
+        availability: out ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+        itemCondition: 'https://schema.org/NewCondition',
+        seller: { '@type': 'Organization', name: 'ElectroHub' },
+      },
+    })
+    return () => setJsonLd('ld-product', null)
+  }, [product, images, out, t])
+
+  const addToCartNow = () => {
+    if (!product) return
+    flyToCart(document.querySelector('[data-gallery-img]'))
+    addToCart(product, qty, size, color)
   }
 
-  const productCost = basePrice * quantity
-
-  // Find active shipping rate matching the selected wilaya
-  const selectedWilayaData = territories.find(t => {
-    const optionName = `${t.name} (${t.code})`;
-    return optionName === orderForm.wilaya || 
-      orderForm.wilaya.toLowerCase().includes(t.name.toLowerCase()) ||
-      (orderForm.wilaya.includes(`(${t.code})`))
-  });
-
-  const getShippingFee = (wilayaName, type = shippingType) => {
-    if (productCost >= minFreeDelivery) return 0
-    if (!wilayaName) return 600
-    if (selectedWilayaData) {
-      if (type === 'desk') {
-        return Number(selectedWilayaData.desk_price)
-      }
-      return Number(selectedWilayaData.home_price)
-    }
-    // Fallback static pricing
-    if (wilayaName.includes('Algiers') || wilayaName.includes('Alger') || wilayaName.includes('16')) return type === 'desk' ? 250 : 400
-    if (wilayaName.includes('Blida') || wilayaName.includes('09')) return type === 'desk' ? 350 : 500
-    if (wilayaName.includes('Oran') || wilayaName.includes('Constantine')) return type === 'desk' ? 450 : 700
-    return type === 'desk' ? 600 : 900
-  }
-  const shippingCost = getShippingFee(orderForm.wilaya)
-  const totalCost = productCost + shippingCost
-
-  const handleAction = async (type) => {
-    const errors = {
-      name: !orderForm.name.trim(),
-      phone: !orderForm.phone.trim(),
-      wilaya: !orderForm.wilaya.trim(),
-      commune: !orderForm.commune.trim(),
-      submit: null
-    }
-
-    setFormErrors(errors)
-
-    if (errors.name || errors.phone || errors.wilaya || errors.commune) {
-      document.getElementById('order-form-section')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const placeOrder = async () => {
+    if (!delivery.validate()) {
+      document.getElementById('express')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
-
-    if (type === 'cart') {
-      addToCart(product, quantity, selectedSize, selectedColor)
-    } else if (type === 'buy') {
-      setIsSubmitting(true)
-      try {
-        const orderData = {
-          clientName: orderForm.name,
-          clientPhone: orderForm.phone,
-          fullName: orderForm.name,
-          phone: orderForm.phone,
-          wilaya: orderForm.wilaya,
-          commune: orderForm.commune,
-          shippingType: shippingType,
-          addressDetails: `${orderForm.commune}, ${orderForm.wilaya}`,
-          items: [{
-            productId: Number(product.id),
-            quantity: Number(quantity),
-            size: selectedSize || null,
-            color: selectedColor || null
-          }]
-        }
-        await api.createOrder(orderData)
-        setIsSubmitting(false)
-        setIsOrderSuccess(true)
-      } catch (err) {
-        setIsSubmitting(false)
-        setFormErrors(prev => ({
-          ...prev,
-          submit: err.message || 'Failed to place order.'
-        }))
-      }
+    setSubmitting(true)
+    try {
+      const res = await api.createOrder({
+        ...delivery.payload(),
+        items: [{ productId: Number(product.id), quantity: qty, size: size || null, color: color || null }],
+      })
+      delivery.remember()
+      setOrder(res)
+    } catch (err) {
+      delivery.setErrors((e) => ({ ...e, submit: err.message }))
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  if (loading) {
+  const share = async () => {
+    const url = window.location.href
+    try {
+      if (navigator.share) await navigator.share({ title: product.name, url })
+      else {
+        await navigator.clipboard.writeText(url)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1800)
+      }
+    } catch {
+      /* dismissed */
+    }
+  }
+
+  if (status === 'missing') {
     return (
-      <div className="min-h-screen bg-background text-foreground pt-24 pb-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 animate-pulse">
-          <div className="h-6 bg-foreground/5 rounded w-1/4 mb-8" />
-          <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
-            <div className="space-y-4">
-              <div className="w-full aspect-square rounded-3xl bg-foreground/5" />
-              <div className="grid grid-cols-4 gap-4">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="aspect-square rounded-2xl bg-foreground/5" />
-                ))}
-              </div>
-            </div>
-            <div className="space-y-6">
-              <div className="h-4 bg-foreground/5 rounded w-1/6" />
-              <div className="h-12 bg-foreground/5 rounded w-3/4" />
-              <div className="h-6 bg-foreground/5 rounded w-1/3" />
-              <div className="h-10 bg-foreground/5 rounded w-1/2" />
-              <div className="h-[200px] bg-foreground/5 rounded-3xl" />
-            </div>
+      <Page key="missing">
+        <main id="main" className="flex min-h-[70svh] items-center pt-6">
+          <div className="container-x">
+            <p className="eyebrow text-forest">404</p>
+            <h1 className="display mt-4 text-h2">{t('ui.productMissing', 'Produit introuvable')}</h1>
+            <Btn to="/shop" variant="volt" chip className="mt-8">
+              {t('nav.shop')}
+            </Btn>
           </div>
-        </div>
-      </div>
+        </main>
+      </Page>
     )
   }
 
   if (!product) {
-    return <div className="min-h-screen bg-background text-foreground flex items-center justify-center">Product not found</div>
-  }
-
-  return (
-    <div className="min-h-screen bg-background text-foreground pt-24 pb-40">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Breadcrumbs */}
-        <nav className="flex items-center gap-2 text-sm text-kurima-muted mb-8">
-          <Link to="/" className="hover:text-kurima-orange transition-colors">{t('nav.home')}</Link>
-          <ChevronRight className="w-4 h-4" />
-          <span className="hover:text-kurima-orange transition-colors">{product.category}</span>
-          <ChevronRight className="w-4 h-4" />
-          <span className="text-foreground font-medium">{product.name}</span>
-        </nav>
-
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20">
-          {/* Left: Image Gallery */}
-          <div className="space-y-4 w-full max-w-full overflow-hidden">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="w-full max-w-full aspect-square rounded-3xl overflow-hidden bg-kurima-dark border border-white/5 relative group"
-            >
-              <AnimatePresence mode="wait">
-                <motion.img
-                  key={selectedImage}
-                  src={product.images[selectedImage]}
-                  alt={product.name}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.4 }}
-                  className="w-full h-full object-cover"
-                />
-              </AnimatePresence>
-              
-              <button 
-                onClick={toggleLike}
-                className="absolute top-6 right-6 w-12 h-12 rounded-full bg-background/40 backdrop-blur-md flex items-center justify-center text-foreground/70 hover:text-red-500 transition-all border border-border"
-              >
-                <Heart className={`w-6 h-6 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-              </button>
-
-              <Badge className="absolute top-6 left-6 bg-kurima-orange text-black font-bold px-4 py-1.5 rounded-full">
-                {product.tag}
-              </Badge>
-            </motion.div>
-
-            {/* Thumbnails */}
-            <div className="grid grid-cols-4 gap-2 sm:gap-4">
-              {product.images.map((img, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedImage(i)}
-                  className={`aspect-square rounded-2xl overflow-hidden border-2 transition-all ${
-                    selectedImage === i ? 'border-kurima-orange' : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
-                >
-                  <img src={img} alt="" className="w-full h-full object-cover" />
-                </button>
-              ))}
+    return (
+      <Page key="loading">
+        <main id="main" className="pt-6 pb-24 md:pt-9" aria-busy="true">
+          <div className="container-x grid gap-10 lg:grid-cols-2 lg:gap-16">
+            <div className="skeleton aspect-square rounded-[1.5rem]" />
+            <div className="space-y-4">
+              <div className="skeleton h-3 w-1/4 rounded" />
+              <div className="skeleton h-14 w-4/5 rounded-xl" />
+              <div className="skeleton h-10 w-1/3 rounded-xl" />
+              <div className="skeleton mt-10 h-48 rounded-[1.5rem]" />
             </div>
           </div>
+        </main>
+      </Page>
+    )
+  }
 
-          {/* Right: Product Info */}
-          <div className="flex flex-col">
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.2 }}
-            >
-              <p className="text-kurima-orange font-bold tracking-widest text-sm uppercase mb-2">
-                {product.category}
-              </p>
-              <h1 className="text-4xl sm:text-5xl font-black text-foreground mb-4 leading-tight">
-                {product.name}
+  const tag = TAG_KEYS[product.tag]
+  const colors = Array.isArray(product.colors) ? product.colors.filter((c) => c?.name) : []
+  const sizes = Array.isArray(product.sizes) ? product.sizes.filter((s) => sizeName(s)) : []
+  const details = Array.isArray(product.details) ? product.details.filter(Boolean) : []
+  const positives = Array.isArray(product.positives) ? product.positives.filter(Boolean) : []
+  const negatives = Array.isArray(product.negatives) ? product.negatives.filter(Boolean) : []
+
+  return (
+    <Page key={`p-${product.id}`} deps={[product.id, related]}>
+      <main id="main" ref={scope} className="pt-6 pb-28 md:pt-9">
+        <div className="container-x">
+          {/* Breadcrumbs */}
+          <nav data-intro aria-label={t('ui.breadcrumb', 'Fil d’Ariane')} className="eyebrow mb-8 flex flex-wrap items-center gap-2 text-ink-900/65">
+            <Link to="/" className="hover:text-ink-900">
+              {t('nav.home')}
+            </Link>
+            <span>/</span>
+            <Link to="/shop" className="hover:text-ink-900">
+              {t('nav.shop')}
+            </Link>
+            {product.category && (
+              <>
+                <span>/</span>
+                <Link to={`/shop?category=${encodeURIComponent(product.category)}`} className="hover:text-ink-900">
+                  {categoryLabel(t, product.category)}
+                </Link>
+              </>
+            )}
+            <span>/</span>
+            <span className="max-w-[16rem] truncate text-ink-900/80">{product.name}</span>
+          </nav>
+
+          <div className="grid gap-10 lg:grid-cols-12 lg:gap-16">
+            <div className="lg:col-span-6">
+              <Gallery images={images} name={product.name} />
+            </div>
+
+            <div className="lg:col-span-6">
+              <div data-intro className="flex flex-wrap items-center gap-2">
+                {product.brand && (
+                  <Link to={`/shop?brand=${encodeURIComponent(product.brand)}`} className="eyebrow rounded-full bg-volt px-2.5 py-1.5 text-ink-900">
+                    {product.brand}
+                  </Link>
+                )}
+                {product.gamme && <span className="eyebrow rounded-full bg-ink-900/[0.06] px-2.5 py-1.5 text-ink-900/75 ring-hair">{product.gamme}</span>}
+                {tag && <span className="eyebrow rounded-full bg-ink-900/[0.06] px-2.5 py-1.5 text-ink-900/75 ring-hair">{t(tag)}</span>}
+              </div>
+
+              <h1 className="mt-4 text-[clamp(1.8rem,3.2vw,2.9rem)] leading-[1.05] font-semibold tracking-[-0.035em] text-ink-900">
+                <SplitWords text={product.name} />
               </h1>
-              
-              <div className="mb-2">
-                <span className="text-xs text-kurima-muted font-bold tracking-wider">
-                  Ref: {product.ref || `REF-P${product.id}`}
+
+              <div data-intro className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[0.9rem] text-ink-900/60">
+                <span className="eyebrow">
+                  {t('ui.ref', 'Réf.')} <span className="text-ink-900/85">{product.ref}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <Stars value={Number(product.rating) || 5} />
+                  <span className="tabular">{(Number(product.rating) || 5).toFixed(1)}</span>
+                </span>
+                <span className={cn('eyebrow flex items-center gap-2', out ? 'text-[#d93025]' : 'text-forest')}>
+                  {!out && <span className="live-dot" />}
+                  {out ? t('ui.outOfStock', 'Rupture') : lowStock ? t('ui.lowStock', 'Plus que {{n}} en stock', { n: product.quantity }) : t('ui.inStock', 'En stock')}
                 </span>
               </div>
-              
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-3 mb-8">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl sm:text-3xl font-black text-foreground">
-                    {typeof basePrice === 'number' ? basePrice.toLocaleString() : basePrice} DA
-                  </span>
-                  {originalPrice && (
-                    <span className="text-lg sm:text-xl text-kurima-muted line-through">
-                      {typeof originalPrice === 'number' ? originalPrice.toLocaleString() : originalPrice} DA
-                    </span>
-                  )}
-                </div>
-                <Separator orientation="vertical" className="h-8 bg-white/10 hidden sm:block" />
-                <div className="flex items-center gap-1">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 fill-kurima-orange text-kurima-orange" />
-                  ))}
-                  <span className="text-xs sm:text-sm text-kurima-muted ml-2">(48 {t('productPage.reviews', 'Reviews')})</span>
-                </div>
-              </div>
-              {/* Color Selection */}
-              <div className="mb-8">
-                <h3 className="text-sm font-bold uppercase tracking-widest text-foreground mb-4">{t('product.color')}: <span className="text-kurima-muted ml-2">{selectedColor}</span></h3>
-                <div className="flex gap-3">
-                  {product.colors.map(color => (
-                    <button
-                      key={color.name}
-                      onClick={() => setSelectedColor(color.name)}
-                      className={`w-10 h-10 rounded-full border-2 p-1 transition-all ${
-                        selectedColor === color.name ? 'border-kurima-orange scale-110' : 'border-transparent'
-                      }`}
-                    >
-                      <div className="w-full h-full rounded-full" style={{ backgroundColor: color.hex }} />
-                    </button>
-                  ))}
-                </div>
+
+              {/* Price */}
+              <div data-intro className="mt-8 flex flex-wrap items-end gap-x-4 gap-y-2 border-y border-ink-900/[0.08] py-6">
+                <span className="display tabular text-[clamp(2.4rem,4vw,3.4rem)] leading-none tracking-[-0.05em] text-ink-900">{formatDA(price)}</span>
+                {original && (
+                  <>
+                    <span className="tabular pb-1 text-[1.1rem] text-ink-900/65 line-through">{formatDA(original)}</span>
+                    <span className="eyebrow mb-1.5 rounded-full bg-volt px-2.5 py-1.5 text-ink-900">−{Math.round(promoOf(product))}%</span>
+                  </>
+                )}
+                <span className="eyebrow w-full text-ink-900/65">{t('ui.priceNote', 'Prix TTC · paiement à la livraison')}</span>
               </div>
 
-              {/* Size Selection */}
-              <div className="mb-10">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-foreground">{t('product.size')}</h3>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  {product.sizes.map(size => {
-                    const sizeName = typeof size === 'object' ? size.name : size
-                    return (
-                      <button
-                        key={sizeName}
-                        onClick={() => setSelectedSize(sizeName)}
-                        className={`min-w-[60px] px-4 h-12 rounded-xl font-bold transition-all border-2 flex flex-col items-center justify-center cursor-pointer ${
-                          selectedSize === sizeName 
-                            ? 'bg-kurima-orange border-kurima-orange text-black' 
-                            : 'bg-foreground/5 border-border text-foreground/60 hover:border-foreground/20'
-                        }`}
-                      >
-                        <span className="text-xs">{sizeName}</span>
-                        {typeof size === 'object' && size.priceSold !== undefined && (
-                          <span className={`text-[8px] font-black mt-0.5 ${selectedSize === sizeName ? 'text-black/80' : 'text-kurima-muted'}`}>
-                            {Number(size.priceSold).toLocaleString()} DA
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Compare & Fiche Technique Buttons side-by-side right under specifications */}
-                <div className="flex flex-col sm:flex-row gap-3 mt-6 w-full">
-                  <Button
-                    onClick={() => navigate(`/compare?p1=${product.id}`)}
-                    className="flex-1 bg-kurima-orange border-kurima-orange text-black font-extrabold rounded-full py-4 text-xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-kurima-orange-light hover:border-kurima-orange-light shadow-lg shadow-kurima-orange/20"
-                  >
-                    <GitCompare className="w-4 h-4 text-black" />
-                    {t('productPage.compareToOthers', 'Compare with other products')}
-                  </Button>
-                  
-                  <Button
-                    onClick={() => {
-                      alert('Fiche Technique (Technical Datasheet) chargée avec succès.')
-                    }}
-                    className="flex-1 bg-kurima-orange border-kurima-orange text-black font-extrabold rounded-full py-4 text-xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2 hover:bg-kurima-orange-light hover:border-kurima-orange-light shadow-lg shadow-kurima-orange/20"
-                  >
-                    <FileText className="w-4 h-4 text-black" />
-                    Fiche Technique
-                  </Button>
-                </div>
-              </div>
-
-              {/* Direct COD Order Form right under specs */}
-              <div id="order-form-section" className="mt-8 bg-foreground/[0.015] border border-foreground/10 rounded-3xl p-6 relative overflow-hidden shadow-xl">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_20%,rgba(235,94,40,0.03),transparent_40%)]" />
-                
-                <div className="relative mb-6">
-                  <Badge className="bg-kurima-orange text-black font-extrabold mb-2 uppercase tracking-widest text-[8px]">
-                    {t('productPage.fastCod', 'Fast COD Checkout')}
-                  </Badge>
-                  <h3 className="text-lg font-black uppercase tracking-tight text-foreground">
-                    {t('productPage.orderDirectly', 'Order Directly')}
-                  </h3>
-                  <p className="text-kurima-muted text-[11px] leading-relaxed">
-                    {t('productPage.codSubtitle', 'Fill out your delivery info to purchase this item instantly.')}
+              {/* Specifications */}
+              {sizes.length > 0 && (
+                <div data-intro className="mt-7">
+                  <p className="eyebrow mb-3 text-ink-900/60">
+                    {t('product.size')} : <span className="text-ink-900">{size}</span>
                   </p>
-                </div>
-
-                <div className="relative space-y-4 text-left rtl:text-right">
-                  {/* Full Name */}
-                  <div className="flex flex-col relative">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted mb-1 text-left rtl:text-right">
-                      {t('productPage.fullName', 'Full Name')} <span className="text-kurima-orange">*</span>
-                    </label>
-                    <div className="relative">
-                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
-                      <input
-                        type="text"
-                        placeholder={t('productPage.namePlaceholder', 'Your Full Name')}
-                        value={orderForm.name}
-                        onChange={(e) => {
-                          setOrderForm({ ...orderForm, name: e.target.value })
-                          setFormErrors({ ...formErrors, name: false })
-                        }}
-                        className={`w-full pl-11 pr-4 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/30 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
-                          formErrors.name ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                        }`}
-                      />
-                    </div>
-                    {formErrors.name && (
-                      <span className="text-[9px] text-kurima-orange font-bold mt-1 uppercase tracking-wider text-left rtl:text-right">{t('productPage.nameRequired', 'Name is required')}</span>
-                    )}
-                  </div>
-
-                  {/* Phone Number */}
-                  <div className="flex flex-col relative">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted mb-1 text-left rtl:text-right">
-                      {t('productPage.phoneNumber', 'Phone Number')} <span className="text-kurima-orange">*</span>
-                    </label>
-                    <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
-                      <input
-                        type="tel"
-                        placeholder={t('productPage.phonePlaceholder', '05 / 06 / 07 XX XX XX XX')}
-                        value={orderForm.phone}
-                        onChange={(e) => {
-                          setOrderForm({ ...orderForm, phone: e.target.value })
-                          setFormErrors({ ...formErrors, phone: false })
-                        }}
-                        className={`w-full pl-11 pr-4 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/30 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
-                          formErrors.phone ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                        }`}
-                      />
-                    </div>
-                    {formErrors.phone && (
-                      <span className="text-[9px] text-kurima-orange font-bold mt-1 uppercase tracking-wider text-left rtl:text-right">{t('productPage.phoneRequired', 'Phone is required')}</span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* Wilaya Select */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted mb-1 text-left rtl:text-right">
-                        {t('productPage.wilaya', 'Wilaya')} <span className="text-kurima-orange">*</span>
-                      </label>
-                      <div className="relative w-full">
-                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
-                        <select
-                          value={orderForm.wilaya}
-                          onChange={(e) => {
-                            const nextWilaya = e.target.value;
-                            setOrderForm({ ...orderForm, wilaya: nextWilaya, commune: '' })
-                            setFormErrors({ ...formErrors, wilaya: false, commune: false })
-                            const nextWilayaData = territories.find(t => `${t.name} (${t.code})` === nextWilaya);
-                            if (nextWilayaData && !nextWilayaData.desk_active && shippingType === 'desk') {
-                              setShippingType('home');
-                            }
-                          }}
-                          className={`w-full appearance-none pl-11 pr-8 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer ${
-                            formErrors.wilaya ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                          }`}
+                  <div className="flex flex-wrap gap-2">
+                    {sizes.map((s) => {
+                      const n = sizeName(s)
+                      const p = typeof s === 'object' && Number(s.priceSold) > 0 ? finalPrice(product, s) : null
+                      return (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setSize(n)}
+                          aria-pressed={size === n}
+                          className={cn(
+                            'flex min-h-12 flex-col items-center justify-center rounded-2xl px-4 py-2 ring-hair transition-colors duration-300',
+                            size === n ? 'bg-ink-900 text-white' : 'bg-ink-900/[0.03] text-ink-900/80 hover:bg-ink-900/[0.07] hover:text-ink-900',
+                          )}
                         >
-                          <option value="" className="bg-background text-foreground/30">{t('productPage.wilaya', 'Wilaya')}</option>
-                          {territories.map(tObj => {
-                            const optionValue = `${tObj.name} (${tObj.code})`;
-                            return (
-                              <option key={tObj.code} value={optionValue} className="bg-background text-foreground">
-                                {tObj.name} ({tObj.code})
-                              </option>
-                            )
-                          })}
-                        </select>
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                          <ChevronDown className="w-3.5 h-3.5" />
-                        </div>
-                      </div>
-                      {formErrors.wilaya && (
-                        <span className="text-[9px] text-kurima-orange font-bold mt-1 uppercase tracking-wider text-left rtl:text-right">{t('productPage.required', 'Required')}</span>
-                      )}
-                    </div>
-
-                    {/* Commune */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted mb-1 text-left rtl:text-right">
-                        {t('productPage.commune', 'Commune')} <span className="text-kurima-orange">*</span>
-                      </label>
-                      <div className="relative">
-                        <Building className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45 pointer-events-none" />
-                        {territories.length > 0 ? (
-                          <>
-                            <select
-                              value={orderForm.commune}
-                              onChange={(e) => {
-                                setOrderForm({ ...orderForm, commune: e.target.value })
-                                setFormErrors({ ...formErrors, commune: false })
-                              }}
-                              disabled={!orderForm.wilaya}
-                              className={`w-full appearance-none pl-11 pr-8 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                                formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                              }`}
-                            >
-                              <option value="" className="bg-background text-foreground/30">{t('productPage.commune', 'Commune')}</option>
-                              {(selectedWilayaData?.communes || []).map(c => (
-                                <option key={c.id} value={c.name} className="bg-background text-foreground">
-                                  {c.name}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </div>
-                          </>
-                        ) : (
-                          <input
-                            type="text"
-                            placeholder={t('productPage.commune', 'Commune')}
-                            value={orderForm.commune}
-                            onChange={(e) => {
-                              setOrderForm({ ...orderForm, commune: e.target.value })
-                              setFormErrors({ ...formErrors, commune: false })
-                            }}
-                            className={`w-full pl-11 pr-4 py-3 bg-foreground/[0.02] border rounded-2xl text-xs font-semibold text-foreground placeholder-foreground/20 focus:outline-none focus:ring-1 focus:ring-kurima-orange/20 transition-all ${
-                              formErrors.commune ? 'border-kurima-orange ring-1 ring-kurima-orange/20' : 'border-border/80 focus:border-kurima-orange'
-                            }`}
-                          />
-                        )}
-                      </div>
-                      {formErrors.commune && (
-                        <span className="text-[9px] text-kurima-orange font-bold mt-1 uppercase tracking-wider text-left rtl:text-right">{t('productPage.required', 'Required')}</span>
-                      )}
-                    </div>
+                          <span className="text-[0.93rem]">{n}</span>
+                          {p != null && <span className="tabular text-[0.72rem] opacity-60">{formatDA(p)}</span>}
+                        </button>
+                      )
+                    })}
                   </div>
+                </div>
+              )}
 
-                  {/* Delivery Method */}
-                  <div className="flex flex-col mt-4">
-                    <label className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted mb-2 text-left rtl:text-right">
-                      {t('checkout.deliveryType', 'Delivery Method')}
-                    </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Home option */}
+              {colors.length > 0 && (
+                <div data-intro className="mt-6">
+                  <p className="eyebrow mb-3 text-ink-900/60">
+                    {t('product.color')} : <span className="text-ink-900">{color}</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2.5">
+                    {colors.map((c) => (
                       <button
+                        key={c.name}
                         type="button"
-                        onClick={() => setShippingType('home')}
-                        className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
-                          shippingType === 'home'
-                            ? 'border-kurima-orange bg-kurima-orange/[0.03] text-foreground ring-1 ring-kurima-orange/20'
-                            : 'border-border/80 bg-foreground/[0.01] text-foreground/75 hover:bg-foreground/[0.02]'
-                        }`}
+                        title={c.name}
+                        aria-label={c.name}
+                        aria-pressed={color === c.name}
+                        onClick={() => setColor(c.name)}
+                        className={cn('flex size-11 items-center justify-center rounded-full ring-hair transition-shadow', color === c.name && 'shadow-[0_0_0_2px_var(--color-volt)]')}
                       >
-                        <Truck className="w-5 h-5 mb-1.5 text-kurima-orange" />
-                        <span className="text-xs font-bold">{t('checkout.homeDelivery', 'Home Delivery')}</span>
-                        {selectedWilayaData && (
-                          <span className="text-[10px] font-semibold text-kurima-muted mt-0.5">
-                            {productCost >= minFreeDelivery 
-                              ? t('checkout.free', 'FREE') 
-                              : `${Number(selectedWilayaData.home_price).toLocaleString()} DA`}
-                          </span>
-                        )}
+                        <span className="size-8 rounded-full shadow-[inset_0_0_0_1px_rgba(10,12,11,0.2)]" style={{ backgroundColor: c.hex || '#888' }} />
                       </button>
-
-                      {/* Stop desk option */}
-                      <button
-                        type="button"
-                        onClick={() => setShippingType('desk')}
-                        disabled={selectedWilayaData && !selectedWilayaData.desk_active}
-                        className={`flex flex-col items-center justify-center p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                          shippingType === 'desk'
-                            ? 'border-kurima-orange bg-kurima-orange/[0.03] text-foreground ring-1 ring-kurima-orange/20'
-                            : 'border-border/80 bg-foreground/[0.01] text-foreground/75 hover:bg-foreground/[0.02]'
-                        }`}
-                      >
-                        <Building className="w-5 h-5 mb-1.5 text-kurima-orange" />
-                        <span className="text-xs font-bold">{t('checkout.stopDesk', 'Stop Desk')}</span>
-                        {selectedWilayaData && (
-                          <span className="text-[10px] font-semibold text-kurima-muted mt-0.5">
-                            {selectedWilayaData.desk_active 
-                              ? (productCost >= minFreeDelivery 
-                                  ? t('checkout.free', 'FREE') 
-                                  : `${Number(selectedWilayaData.desk_price).toLocaleString()} DA`)
-                              : t('checkout.unavailable', 'Unavailable')}
-                          </span>
-                        )}
-                      </button>
-                    </div>
+                    ))}
                   </div>
+                </div>
+              )}
 
-                  {/* Quantity selector inside form */}
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-kurima-muted text-left rtl:text-right">{t('productPage.quantity', 'Quantity')}</span>
-                    <div className="flex items-center bg-background border border-foreground/10 rounded-full px-3 py-1">
-                      <button 
-                        onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                        className="p-1 text-foreground/60 hover:text-foreground transition-colors"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="w-8 text-center font-bold text-xs">{quantity}</span>
-                      <button 
-                        onClick={() => setQuantity(quantity + 1)}
-                        className="p-1 text-foreground/60 hover:text-foreground transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
+              {/* Actions */}
+              <div data-intro className="mt-8 flex flex-wrap items-center gap-2.5">
+                <div className="flex h-14 items-center rounded-full bg-ink-900/[0.05] ring-hair">
+                  <button type="button" onClick={() => setQty((q) => Math.max(1, q - 1))} className="flex size-14 items-center justify-center text-ink-900/65 hover:text-ink-900" aria-label="−">
+                    <Minus className="size-4" />
+                  </button>
+                  <span className="tabular w-8 text-center text-ink-900" aria-live="polite">
+                    {qty}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setQty((q) => Math.min(Math.max(1, Number(product.quantity) || 99), q + 1))}
+                    className="flex size-14 items-center justify-center text-ink-900/65 hover:text-ink-900"
+                    aria-label="+"
+                  >
+                    <Plus className="size-4" />
+                  </button>
+                </div>
+                <Btn variant="volt" size="lg" chip disabled={out} onClick={addToCartNow} className="flex-1 justify-between ps-7">
+                  {t('productPage.addToCart')}
+                </Btn>
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(product.id)}
+                  aria-pressed={liked}
+                  aria-label={liked ? t('productPage.liked', 'Retirer des favoris') : t('productPage.addToFavorites', 'Ajouter aux favoris')}
+                  className={cn('flex size-14 items-center justify-center rounded-full ring-hair transition-colors', liked ? 'bg-[#ff6b5e]/15 text-[#d93025]' : 'bg-ink-900/[0.05] text-ink-900/75 hover:text-ink-900')}
+                >
+                  <Heart className={cn('size-5', liked && 'fill-current')} />
+                </button>
+              </div>
 
-                  {/* Cost details directly in the form */}
-                  <div className="bg-background/40 border border-foreground/10 rounded-2xl p-4 mt-2 space-y-2 text-left rtl:text-right">
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-kurima-muted">{t('productPage.prodPrice', 'Product Price:')}</span>
-                      <span className="font-semibold text-foreground">{productCost.toLocaleString()} DA</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="text-kurima-muted">{t('productPage.shippingFee', 'Shipping Fee:')}</span>
-                      <span className="font-semibold text-black dark:text-kurima-orange">
-                        {shippingCost === 0 ? t('checkout.free', 'FREE') : `${shippingCost.toLocaleString()} DA`}
-                      </span>
-                    </div>
-                    <div className="h-[1px] bg-foreground/10 my-1" />
-                    <div className="flex justify-between items-center text-xs">
-                      <span className="font-bold text-foreground">{t('productPage.total', 'Total:')}</span>
-                      <span className="font-black text-black dark:text-kurima-orange text-sm">{totalCost.toLocaleString()} DA</span>
-                    </div>
-                  </div>
+              <div data-intro className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <Btn variant="ghost" size="md" disabled={out} onClick={() => setExpress((v) => !v)} icon={<Zap className="size-4 text-forest" />} aria-expanded={express} aria-controls="express">
+                  {t('productPage.buyNow')}
+                </Btn>
+                <Btn to={`/compare?p1=${product.id}`} variant="ghost" size="md" icon={<GitCompare className="size-4" />}>
+                  {t('nav.compare', 'Comparer')}
+                </Btn>
+              </div>
 
-                  {/* Action buttons attached to the bottom of the form */}
-                  <div className="flex flex-col gap-3 pt-3">
-                    {/* Add to Cart & Add to Favorites side-by-side */}
-                    <div className="flex gap-3">
-                      <Button
-                        onClick={() => handleAction('cart')}
-                        className="flex-1 bg-foreground/5 border border-foreground/10 hover:bg-foreground/10 text-foreground font-bold rounded-full py-4 text-xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2"
-                      >
-                        <ShoppingBag className="w-3.5 h-3.5" />
-                        {t('productPage.addToCart', 'Add to Cart')}
-                      </Button>
-                      <Button
-                        onClick={toggleLike}
-                        className={`flex-1 font-bold rounded-full py-4 text-xs cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2 border ${
-                          isLiked 
-                            ? 'bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20' 
-                            : 'bg-foreground/5 border-foreground/10 hover:bg-foreground/10 text-foreground'
-                        }`}
-                      >
-                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
-                        {isLiked ? t('productPage.liked', 'Liked') : t('productPage.addToFavorites', 'Favorites')}
-                      </Button>
-                    </div>
-
-                    {/* Buy Now under them */}
-                    <Button
-                      onClick={() => handleAction('buy')}
-                      disabled={isSubmitting}
-                      className="w-full bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold rounded-full py-4 text-xs shadow-lg shadow-kurima-orange/20 cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              {/* Express order (cash on delivery) */}
+              <div id="express" className="collapse-grid" data-open={express}>
+                <div>
+                  <div className="mt-4 rounded-[1.5rem] bg-ink-900/[0.03] p-5 ring-hair sm:p-6">
+                    <p className="eyebrow mb-1 flex items-center gap-2 text-forest">
+                      <span className="live-dot" /> {t('productPage.fastCod')}
+                    </p>
+                    <p className="mb-6 text-ink-900/62">{t('productPage.codSubtitle')}</p>
+                    <DeliveryFields delivery={delivery} />
+                    <dl className="mt-6 space-y-2 border-t border-ink-900/[0.08] pt-5 text-[0.93rem]">
+                      <div className="flex justify-between text-ink-900/65">
+                        <dt>
+                          {t('productPage.prodPrice')} ({qty}×)
+                        </dt>
+                        <dd className="tabular text-ink-900">{formatDA(subtotal)}</dd>
+                      </div>
+                      <div className="flex justify-between text-ink-900/65">
+                        <dt>{t('productPage.shippingFee')}</dt>
+                        <dd className="tabular text-ink-900">{delivery.fee === 0 ? t('checkout.free') : delivery.fee != null ? formatDA(delivery.fee) : '—'}</dd>
+                      </div>
+                      <div className="flex items-baseline justify-between pt-2">
+                        <dt className="text-ink-900">{t('productPage.total')}</dt>
+                        <dd className="display tabular text-[1.7rem] tracking-[-0.04em] text-forest">{formatDA(subtotal + (delivery.fee || 0))}</dd>
+                      </div>
+                    </dl>
+                    {delivery.errors.submit && <p className="mt-3 text-[0.9rem] text-[#d93025]">{delivery.errors.submit}</p>}
+                    <Btn
+                      variant="volt"
+                      size="lg"
+                      chip={!submitting}
+                      disabled={submitting}
+                      onClick={placeOrder}
+                      className="mt-5 w-full justify-between ps-7"
+                      icon={submitting ? <Loader2 className="size-4 animate-spin" /> : null}
                     >
-                      <Zap className="w-3.5 h-3.5 fill-black text-black animate-pulse" />
-                      {isSubmitting ? 'Placing Order...' : t('productPage.buyNow', 'Buy Now')}
-                    </Button>
-
-                    {formErrors.submit && (
-                      <span className="text-[10px] text-kurima-orange font-bold text-center block uppercase tracking-wider mt-2">
-                        {formErrors.submit}
-                      </span>
-                    )}
+                      {submitting ? t('ui.sending', 'Envoi…') : t('checkout.confirmOrder')}
+                    </Btn>
                   </div>
                 </div>
               </div>
 
-              {/* Trust Badges */}
-              <div className="grid grid-cols-2 gap-4 pt-10 border-t border-white/5">
+              {/* Reassurance */}
+              <ul data-intro className="mt-8 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {[
-                  { icon: Truck, label: t('product.freeShipping') },
-                  { icon: Shield, label: t('product.securePayment') },
-                  { icon: RotateCcw, label: t('product.easyReturns') },
-                  { icon: Share2, label: t('productPage.share', 'Share') },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-sm text-kurima-muted">
-                    <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center">
-                      <item.icon className="w-4 h-4" />
-                    </div>
-                    {item.label}
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        </div>
-
-        {/* Technical Details Section */}
-        <div className="mt-24">
-          <Separator className="bg-white/5 mb-16" />
-          <div className="grid md:grid-cols-3 gap-12">
-            <div>
-              <h2 className="text-2xl font-black text-foreground mb-6">{t('product.features')}</h2>
-              <ul className="space-y-4">
-                {product.details.map((detail, i) => (
-                  <li key={i} className="flex items-start gap-3 text-kurima-muted">
-                    <Check className="w-5 h-5 text-kurima-orange shrink-0" />
-                    <span>{detail}</span>
+                  [Truck, t('ui.r1', 'Livraison 58 wilayas')],
+                  [Banknote, t('ui.r2', 'Paiement à la livraison')],
+                  [ShieldCheck, t('ui.r3', 'Garantie constructeur')],
+                ].map(([Icon, label]) => (
+                  <li key={label} className="flex items-center gap-3 rounded-2xl bg-ink-900/[0.03] px-4 py-3 text-[0.88rem] text-ink-900/75 ring-hair">
+                    <Icon className="size-4 shrink-0 text-forest" /> {label}
                   </li>
                 ))}
               </ul>
-            </div>
-            <div className="md:col-span-2">
-              <h2 className="text-2xl font-black text-foreground mb-6">{t('product.description')}</h2>
-              <div className="prose prose-invert max-w-none text-kurima-muted">
-                <p className="mb-4 text-lg leading-relaxed">
-                  Quality matters. That's why we've engineered the {product.name} to withstand the complexities of modern living. From the reinforced stitching to the intentional pocket placement, this piece is designed for your daily movement.
-                </p>
-                <p className="text-lg leading-relaxed">
-                  The material is curated specifically for breathability without compromising protection, ensuring you stay comfortable, no matter the environment.
-                </p>
-              </div>
+              <button type="button" onClick={share} className="eyebrow mt-5 flex items-center gap-2 text-ink-900/65 hover:text-ink-900">
+                <Share2 className="size-3.5" /> {copied ? t('ui.linkCopied', 'Lien copié') : t('productPage.share')}
+              </button>
             </div>
           </div>
-        </div>
 
+          {/* Details: tabs */}
+          <DetailTabs product={product} details={details} positives={positives} negatives={negatives} />
 
-
-        {/* Related Products */}
-        <div className="mt-32">
-          <div className="flex items-center justify-between mb-12">
-            <h2 className="text-3xl font-black text-foreground">{t('product.related')}</h2>
-            <Link to="/" className="text-kurima-orange font-bold hover:underline flex items-center gap-2">
-              {t('product.viewAll')} <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-            {relatedProducts.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
-            ))}
-          </div>
-        </div>
-      </div>
-      {/* Success Dialog Modal */}
-      <AnimatePresence>
-        {isOrderSuccess && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsOrderSuccess(false)}
-              className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, x: '-50%', y: '-50%' }}
-              animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
-              exit={{ opacity: 0, scale: 0.95, x: '-50%', y: '-50%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-              className="fixed top-1/2 left-1/2 z-[110] w-[92%] max-w-md bg-background p-8 rounded-3xl border border-kurima-orange/20 shadow-2xl text-center"
-            >
-              <div className="w-16 h-16 mx-auto rounded-full bg-kurima-orange/10 flex items-center justify-center mb-6 text-kurima-orange">
-                <Check className="w-8 h-8" />
+          {related.length > 0 && (
+            <section aria-labelledby="pdp-related" className="mt-16 md:mt-20">
+              <SectionHead
+                id="pdp-related"
+                title={t('ui.relatedTitle', 'Vous aimerez aussi')}
+                subtitle={t('ui.relatedSub', 'D’autres références de la même catégorie.')}
+                to={`/shop?category=${encodeURIComponent(product.category || '')}`}
+                linkLabel={t('ui.seeAll', 'Tout voir')}
+              />
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+                {related.map((p) => (
+                  <ProductCard key={p.id} product={p} />
+                ))}
               </div>
-              <h3 className="text-2xl font-black text-foreground mb-2 uppercase tracking-wide">{t('productPage.successTitle', 'Order Placed!')}</h3>
-              <p className="text-kurima-muted text-sm leading-relaxed mb-6">
-                {t('productPage.successText', 'We will contact you shortly to confirm your direct shipment.')}
+            </section>
+          )}
+        </div>
+
+        {/* Mobile sticky bar */}
+        <div className="fixed inset-x-3 bottom-3 z-40 flex items-center gap-3 rounded-full bg-white/90 p-1.5 ps-5 shadow-[0_20px_40px_-10px_rgba(0,0,0,0.7)] ring-hair backdrop-blur-xl lg:hidden">
+          <span className="display tabular flex-1 truncate text-[1.2rem] tracking-[-0.03em] text-ink-900">{formatDA(price)}</span>
+          <Btn variant="volt" size="md" chip disabled={out} onClick={addToCartNow}>
+            {t('productPage.addToCart')}
+          </Btn>
+        </div>
+      </main>
+
+      {/* Order confirmation */}
+      {order && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="order-ok">
+          <button type="button" aria-hidden="true" tabIndex={-1} className="absolute inset-0 bg-ink-900/40 backdrop-blur-md" onClick={() => setOrder(null)} />
+          <div className="relative w-full max-w-md overflow-hidden rounded-[1.75rem] bg-white p-8 text-center ring-hair">
+            <div aria-hidden="true" className="grid-lines-dark absolute inset-0 opacity-60 [mask-image:radial-gradient(circle_at_50%_0%,#000,transparent_70%)]" />
+            <span className="relative mx-auto flex size-16 items-center justify-center rounded-full bg-volt text-ink-900 shadow-[0_0_50px_rgba(154,240,126,0.45)]">
+              <Check className="size-7" />
+            </span>
+            <p id="order-ok" className="display relative mt-6 text-[2rem] tracking-[-0.04em] text-ink-900">
+              {t('productPage.successTitle')}
+            </p>
+            {order.orderId && (
+              <p className="eyebrow relative mt-3 text-forest">
+                {t('ui.orderNo', 'Commande')} {order.orderId}
               </p>
-              <Button
-                onClick={() => {
-                  setIsOrderSuccess(false)
-                  setOrderForm({ name: '', phone: '', wilaya: '', commune: '' })
-                }}
-                className="w-full bg-kurima-orange hover:bg-kurima-orange-light text-black font-extrabold py-3.5 rounded-xl cursor-pointer"
-              >
-                {t('productPage.continueShopping', 'Continue Shopping')}
-              </Button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
-    </div>
+            )}
+            <p className="relative mt-3 text-ink-900/65">{t('productPage.successText')}</p>
+            <Btn variant="volt" chip className="relative mt-8 w-full justify-between ps-6" onClick={() => (setOrder(null), setExpress(false))}>
+              {t('productPage.continueShopping')}
+            </Btn>
+          </div>
+        </div>
+      )}
+    </Page>
   )
 }

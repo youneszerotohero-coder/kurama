@@ -1,4 +1,5 @@
 import prisma from '../config/db.js';
+import { mediaUrl } from '../lib/media.js';
 
 // Helper to generate unique EH-YYYY-XXXXX orderId
 const generateUniqueOrderId = async () => {
@@ -94,6 +95,11 @@ export const createOrder = async (orderData, userId = null) => {
 
     // Validate stock and deduct inventory
     for (const item of items) {
+      item.productId = Number(item.productId);
+      item.quantity = Number(item.quantity);
+      if (!Number.isInteger(item.quantity) || item.quantity < 1) {
+        throw new Error('Each item needs a quantity of at least 1.');
+      }
       const product = await tx.product.findUnique({ where: { id: item.productId } });
       if (!product) {
         throw new Error(`Product with ID ${item.productId} not found.`);
@@ -103,9 +109,13 @@ export const createOrder = async (orderData, userId = null) => {
         throw new Error(`Insufficient stock for product: ${product.name}. Available: ${product.quantity}, Requested: ${item.quantity}`);
       }
 
-      // Calculate selling price with promotion percentage if any
+      // Selling price: the chosen specification's price when it has one, then the promotion
       const promoMultiplier = 1 - (Number(product.promotionPercentage) / 100);
-      const itemPrice = Number(product.priceSold) * promoMultiplier;
+      const variant = Array.isArray(product.sizes)
+        ? product.sizes.find((s) => s && typeof s === 'object' && s.name === item.size)
+        : null;
+      const basePrice = variant && Number(variant.priceSold) > 0 ? Number(variant.priceSold) : Number(product.priceSold);
+      const itemPrice = Math.round(basePrice * promoMultiplier * 100) / 100;
       subtotal += itemPrice * item.quantity;
 
       // Update product inventory
@@ -123,7 +133,8 @@ export const createOrder = async (orderData, userId = null) => {
         name: product.name,
         price: itemPrice,
         quantity: item.quantity,
-        image: product.image,
+        // Snapshot a short URL rather than copying a base64 image into every order line
+        image: mediaUrl('product', product.id, 'main', product.image),
         size: item.size || null,
         color: item.color || null
       });

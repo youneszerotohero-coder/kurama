@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
+import mediaRouter from './routes/media.routes.js';
 import { PORT } from './config/env.js';
 import { errorHandlerMiddleware } from './middleware/error.middleware.js';
 
@@ -14,6 +16,8 @@ import shippingRouter, { adminShippingRouter } from './routes/shipping.routes.js
 const app = express();
 
 // Middlewares
+app.disable('x-powered-by');
+app.use(compression());
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -31,12 +35,19 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
 
+// The wilaya / commune list rarely changes: let browsers keep it for an hour
+app.use('/api/shipping/territories', (req, res, next) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  next();
+});
+
 // Mount Public/Client API Routers
 app.use('/api/auth', authRouter);
 app.use('/api/products', productRouter);
 app.use('/api/orders', orderRouter);
 app.use('/api/settings', settingRouter);
 app.use('/api/shipping', shippingRouter);
+app.use('/api/media', mediaRouter);
 
 // Mount Admin API Routers
 app.use('/api/admin/products', adminProductRouter);

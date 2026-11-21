@@ -11,12 +11,20 @@ const getHeaders = () => {
   return headers;
 };
 
+// Short-lived cache + de-duplication for public GET requests (cleared by any write)
+const getCache = new Map();
+const GET_TTL = 30_000;
+export const clearApiCache = () => getCache.clear();
+
 export const apiRequest = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;
+  const method = (options.method || 'GET').toUpperCase();
   const headers = getHeaders();
-  
+
+  // `cache` is our own flag: never hand it to fetch (where it means something else)
+  const { cache: useCache, ...fetchOptions } = options;
   const config = {
-    ...options,
+    ...fetchOptions,
     headers: {
       ...headers,
       ...options.headers,
@@ -27,14 +35,29 @@ export const apiRequest = async (endpoint, options = {}) => {
     config.body = JSON.stringify(config.body);
   }
 
-  const response = await fetch(url, config);
-  const data = await response.json().catch(() => ({}));
+  const run = async () => {
+    const response = await fetch(url, config);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.message || `Request failed with status ${response.status}`);
+    }
+    return data;
+  };
 
-  if (!response.ok) {
-    throw new Error(data.message || `Request failed with status ${response.status}`);
+  if (method !== 'GET') {
+    getCache.clear();
+    return run();
   }
+  if (!useCache) return run();
 
-  return data;
+  const hit = getCache.get(url);
+  if (hit && Date.now() - hit.at < GET_TTL) return hit.promise;
+  const promise = run().catch((err) => {
+    getCache.delete(url);
+    throw err;
+  });
+  getCache.set(url, { at: Date.now(), promise });
+  return promise;
 };
 
 const mapProduct = (p) => {
@@ -67,28 +90,28 @@ export const api = {
       }
     });
     const queryString = query.toString();
-    const data = await apiRequest(`/products${queryString ? `?${queryString}` : ''}`);
+    const data = await apiRequest(`/products${queryString ? `?${queryString}` : ''}`, { cache: true });
     return Array.isArray(data) ? data.map(mapProduct) : data;
   },
   getProduct: async (id) => {
-    const data = await apiRequest(`/products/${id}`);
+    const data = await apiRequest(`/products/${id}`, { cache: true });
     return mapProduct(data);
   },
-  getCategories: () => apiRequest('/products/categories'),
-  getBrands: () => apiRequest('/products/brands'),
-  getGammes: () => apiRequest('/products/gammes'),
+  getCategories: (opts = {}) => apiRequest('/products/categories', { cache: !opts.fresh }),
+  getBrands: (opts = {}) => apiRequest('/products/brands', { cache: !opts.fresh }),
+  getGammes: (opts = {}) => apiRequest('/products/gammes', { cache: !opts.fresh }),
 
   // Orders
   createOrder: (orderData) => apiRequest('/orders', { method: 'POST', body: orderData }),
   getMyOrders: () => apiRequest('/orders/my-orders'),
 
   // Shipping Rates & Territories
-  getTerritories: () => apiRequest('/shipping/territories'),
+  getTerritories: () => apiRequest('/shipping/territories', { cache: true }),
   adminGetShippingRates: () => apiRequest('/admin/shipping/rates'),
   adminBulkUpdateShippingRates: (rates) => apiRequest('/admin/shipping/rates', { method: 'PATCH', body: { rates } }),
 
   // Public Settings
-  getPublicSettings: () => apiRequest('/settings/public'),
+  getPublicSettings: () => apiRequest('/settings/public', { cache: true }),
 
   // Admin Dashboard
   getDashboardStats: (startDate, endDate) => {

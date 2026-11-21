@@ -1,4 +1,3 @@
-import React from 'react'
 import { Navigate, Outlet } from 'react-router-dom'
 
 export default function ProtectedRoute({ requireAdmin = false }) {
@@ -9,7 +8,7 @@ export default function ProtectedRoute({ requireAdmin = false }) {
   if (storedUser) {
     try {
       user = JSON.parse(storedUser)
-    } catch (e) {
+    } catch {
       user = null
     }
   }

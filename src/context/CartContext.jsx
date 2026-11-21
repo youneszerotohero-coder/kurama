@@ -1,26 +1,38 @@
-import { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect, useLayoutEffect, useRef } from 'react'
 
 const CartContext = createContext()
 
 export function CartProvider({ children }) {
-  const [cartItems, setCartItems] = useState(() => {
+  // Starts empty (matches the prerendered HTML), then restores the saved cart before the first paint
+  const [cartItems, setCartItems] = useState([])
+  const restored = useRef(false)
+  useLayoutEffect(() => {
     try {
-      const saved = localStorage.getItem('kurama_cart')
-      return saved ? JSON.parse(saved) : []
+      const saved = JSON.parse(localStorage.getItem('kurama_cart') || '[]')
+      if (Array.isArray(saved) && saved.length) setCartItems(saved)
     } catch (e) {
-      console.error('Failed to parse cart items', e)
-      return []
+      console.warn('Saved cart could not be read', e)
     }
-  })
-  
+    restored.current = true
+  }, [])
+
   const [isCartOpen, setIsCartOpen] = useState(false)
 
-  // Sync to localStorage
+  // Sync to localStorage — skipping the very first pass, which still holds the empty initial state
+  const synced = useRef(false)
   useEffect(() => {
+    if (!restored.current) return
+    if (!synced.current) {
+      synced.current = true
+      return
+    }
     localStorage.setItem('kurama_cart', JSON.stringify(cartItems))
   }, [cartItems])
 
-  const addToCart = (product, quantity = 1, size = '', color = '') => {
+  const [lastAdded, setLastAdded] = useState(null)
+
+  // `open: true` shows the cart drawer; otherwise a small confirmation toast appears
+  const addToCart = (product, quantity = 1, size = '', color = '', { open = false } = {}) => {
     const defaultColor = color || (product.colors && product.colors[0]?.name) || ''
     
     // Get size name string for defaultSize lookup
@@ -52,13 +64,11 @@ export function CartProvider({ children }) {
       const promoPercent = Number(product.promotionPercentage || 0)
       const discountedPrice = promoPercent > 0 ? (originalSizePrice * (1 - promoPercent / 100)) : originalSizePrice
 
-      const productImage = product.image || (product.images && product.images[0]) || '/logo.png'
+      const productImage = product.image || (product.images && product.images[0]) || '/img/bundle-480.webp'
 
       if (existingItemIndex > -1) {
         // Item exists, update quantity
-        const newItems = [...prevItems]
-        newItems[existingItemIndex].quantity += quantity
-        return newItems
+        return prevItems.map((item, i) => (i === existingItemIndex ? { ...item, quantity: item.quantity + quantity } : item))
       } else {
         // New item
         return [
@@ -66,6 +76,7 @@ export function CartProvider({ children }) {
           {
             cartItemId,
             id: product.id,
+            ref: product.ref,
             name: product.name,
             price: discountedPrice,
             priceOriginal: originalSizePrice,
@@ -82,8 +93,8 @@ export function CartProvider({ children }) {
       }
     })
     
-    // Auto-open cart on add
-    setIsCartOpen(true)
+    if (open) setIsCartOpen(true)
+    else setLastAdded({ key: Date.now(), name: product.name, image: product.image || (product.images && product.images[0]) || '', quantity })
   }
 
   const removeFromCart = (cartItemId) => {
@@ -137,7 +148,7 @@ export function CartProvider({ children }) {
 
       if (existingIndex > -1 && existingIndex !== itemIndex) {
         // Merge quantity with the existing item
-        newItems[existingIndex].quantity += item.quantity
+        newItems[existingIndex] = { ...newItems[existingIndex], quantity: newItems[existingIndex].quantity + item.quantity }
         // Remove the item being updated
         newItems.splice(itemIndex, 1)
       } else {
@@ -176,6 +187,8 @@ export function CartProvider({ children }) {
         clearCart,
         cartCount,
         cartTotal,
+        lastAdded,
+        dismissLastAdded: () => setLastAdded(null),
       }}
     >
       {children}

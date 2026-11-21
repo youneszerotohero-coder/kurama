@@ -1,614 +1,469 @@
-import { useState, useMemo, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Search, 
-  SlidersHorizontal, 
-  ArrowUpDown, 
-  Check, 
-  ShoppingBag, 
-  X, 
-  Sparkles, 
-  PackageOpen, 
-  Eye,
-  Heart,
-  ChevronDown
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useCart } from '@/context/CartContext'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import ProductCard from '@/components/ProductCard'
-
+import { Search, SlidersHorizontal, X, Heart, PackageOpen } from 'lucide-react'
 import api from '@/lib/api'
+import { useStore } from '@/context/StoreContext'
+import { useFavorites } from '@/lib/favorites'
+import { setSeo } from '@/lib/seo'
+import { lockScroll, unlockScroll } from '@/lib/motion'
+import { categoryLabel, finalPrice, formatDA, formatNumber, fromPrice, promoOf } from '@/lib/format'
+import Page, { SplitWords, useIntro } from '@/components/layout/Page'
+import ProductCard, { ProductCardSkeleton } from '@/components/ProductCard'
+import Btn, { cn } from '@/components/ui/Btn'
 
-const SORT_OPTIONS = [
-  { id: 'featured', label: 'Featured & Best Match' },
-  { id: 'price-asc', label: 'Price: Low to High' },
-  { id: 'price-desc', label: 'Price: High to Low' },
-  { id: 'rating', label: 'Customer Rating' }
-]
+const PAGE = 24
 
-export default function ShopPage() {
+const SORTS = {
+  featured: () => 0,
+  'price-asc': (a, b) => fromPrice(a).price - fromPrice(b).price,
+  'price-desc': (a, b) => fromPrice(b).price - fromPrice(a).price,
+  rating: (a, b) => (b.rating || 0) - (a.rating || 0),
+  name: (a, b) => String(a.name).localeCompare(String(b.name)),
+}
+
+function FilterGroup({ title, children }) {
+  return (
+    <div className="border-b border-ink-900/[0.08] py-6 first:pt-0">
+      <p className="eyebrow mb-4 text-ink-900/65">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+function Option({ active, onClick, label, count }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-start text-[0.93rem] transition-colors duration-300',
+        active ? 'bg-volt text-ink-900' : 'text-ink-900/75 hover:bg-ink-900/[0.05] hover:text-ink-900',
+      )}
+    >
+      <span className="truncate">{label}</span>
+      {count != null && <span className={cn('eyebrow', active ? 'text-ink-900/60' : 'text-ink-900/62')}>{formatNumber(count)}</span>}
+    </button>
+  )
+}
+
+function Filters({ params, set, brands, ranges, priceCeil, favCount }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-  const { addToCart } = useCart()
-  const [searchParams, setSearchParams] = useSearchParams()
-
-  // Dynamic filter options state
-  const [dbCategories, setDbCategories] = useState([])
-  const [dbBrands, setDbBrands] = useState([])
-  const [dbGammes, setDbGammes] = useState([])
-
-  // State Management
-  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('search') || '')
-  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get('category') || 'all')
-  const [selectedBrand, setSelectedBrand] = useState(() => searchParams.get('brand') || 'All Brands')
-  const [selectedGamme, setSelectedGamme] = useState(() => searchParams.get('gamme') || 'All Gammes')
-  const [maxPrice, setMaxPrice] = useState(300000)
-  const [onlyFavorites, setOnlyFavorites] = useState(false)
-  const [sortBy, setSortBy] = useState('featured')
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
-
-  // Sync state with URL params
-  useEffect(() => {
-    const search = searchParams.get('search') || ''
-    const category = searchParams.get('category') || 'all'
-    const brand = searchParams.get('brand') || 'All Brands'
-    const gamme = searchParams.get('gamme') || 'All Gammes'
-    
-    setSearchQuery(search)
-    setSelectedCategory(category)
-    setSelectedBrand(brand)
-    setSelectedGamme(gamme)
-  }, [searchParams])
-
-  // Update URL search parameters when filters change
-  useEffect(() => {
-    const newParams = {}
-    if (searchQuery) newParams.search = searchQuery
-    if (selectedCategory !== 'all') newParams.category = selectedCategory
-    if (selectedBrand !== 'All Brands') newParams.brand = selectedBrand
-    if (selectedGamme !== 'All Gammes') newParams.gamme = selectedGamme
-    setSearchParams(newParams, { replace: true })
-  }, [searchQuery, selectedCategory, selectedBrand, selectedGamme, setSearchParams])
-
-  // Live Products State
-  const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  // Localized Lists
-  const categoriesList = useMemo(() => {
-    const list = [{ id: 'all', label: t('shop.allCategories', 'All Categories') }]
-    dbCategories.forEach(cat => {
-      const name = typeof cat === 'string' ? cat : (cat?.name || '')
-      const id = typeof cat === 'string' ? cat : (cat?.name || '')
-      if (name) {
-        list.push({
-          id: id,
-          label: t(`shop.${name}`, name.charAt(0).toUpperCase() + name.slice(1))
-        })
-      }
-    })
-    return list
-  }, [dbCategories, t])
-
-  const brandsList = useMemo(() => {
-    const names = dbBrands.map(b => typeof b === 'string' ? b : (b?.name || ''))
-    return ['All Brands', ...names].filter(Boolean)
-  }, [dbBrands])
-
-  const gammesList = useMemo(() => {
-    const filtered = selectedBrand === 'All Brands'
-      ? dbGammes
-      : dbGammes.filter(g => {
-          const bName = typeof g.brand === 'object' && g.brand !== null ? g.brand.name : g.brand
-          return String(bName || '').toLowerCase() === selectedBrand.toLowerCase()
-        })
-    const names = filtered.map(g => typeof g === 'string' ? g : (g?.name || ''))
-    return names.filter(Boolean)
-  }, [dbGammes, selectedBrand])
-
-  const sortOptionsList = useMemo(() => [
-    { id: 'featured', label: t('shop.sortFeatured', 'Featured & Best Match') },
-    { id: 'price-asc', label: t('shop.sortPriceAsc', 'Price: Low to High') },
-    { id: 'price-desc', label: t('shop.sortPriceDesc', 'Price: High to Low') },
-    { id: 'rating', label: t('shop.sortRating', 'Customer Rating') }
-  ], [t])
-
-  // Scroll to top and fetch dynamic lists
-  useEffect(() => {
-    window.scrollTo(0, 0)
-
-    const fetchFilters = async () => {
-      try {
-        const [cats, brs, gms] = await Promise.all([
-          api.getCategories(),
-          api.getBrands(),
-          api.getGammes()
-        ])
-        if (cats && cats.length) setDbCategories(cats)
-        if (brs && brs.length) setDbBrands(brs)
-        if (gms && gms.length) setDbGammes(gms)
-      } catch (err) {
-        console.error('Error fetching filter values:', err)
-      }
-    }
-    fetchFilters()
-  }, [])
-
-  // Fetch products from backend whenever filters or search query changes
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true)
-      try {
-        const queryParams = {
-          search: searchQuery || undefined,
-          category: selectedCategory === 'all' ? undefined : selectedCategory,
-          brand: selectedBrand === 'All Brands' ? undefined : selectedBrand,
-          gamme: selectedGamme === 'All Gammes' ? undefined : selectedGamme,
-          maxPrice: maxPrice,
-          sort: sortBy
-        }
-        const data = await api.getProducts(queryParams)
-        // Convert prices to numbers safely
-        let mappedData = data.map(p => ({
-          ...p,
-          price: Number(p.price),
-          originalPrice: p.originalPrice ? Number(p.originalPrice) : null
-        }))
-
-        // Filter by favorites locally if onlyFavorites is true
-        if (onlyFavorites) {
-          try {
-            const favs = JSON.parse(localStorage.getItem('kurama_favorites') || '[]')
-            mappedData = mappedData.filter(p => favs.includes(Number(p.id)))
-          } catch (e) {
-            console.error(e)
-          }
-        }
-
-        setProducts(mappedData)
-      } catch (err) {
-        console.error('Error fetching products:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    const delayDebounce = setTimeout(() => {
-      fetchProducts()
-    }, 250) // debounce search inputs slightly
-
-    return () => clearTimeout(delayDebounce)
-  }, [searchQuery, selectedCategory, selectedBrand, selectedGamme, maxPrice, onlyFavorites, sortBy])
-
-  // Reset selected gamme if the selected brand changes and the current gamme is not in the filtered gammes list
-  useEffect(() => {
-    if (dbGammes.length > 0 && selectedGamme !== 'All Gammes' && !gammesList.includes(selectedGamme)) {
-      setSelectedGamme('All Gammes')
-    }
-  }, [selectedBrand, gammesList, selectedGamme, dbGammes])
-
-  // Clear filters helper
-  const handleResetFilters = () => {
-    setSearchQuery('')
-    setSelectedCategory('all')
-    setSelectedBrand('All Brands')
-    setSelectedGamme('All Gammes')
-    setMaxPrice(300000)
-    setOnlyFavorites(false)
-    setSortBy('featured')
-  }
+  const brand = params.get('brand') || ''
+  const gamme = params.get('gamme') || ''
+  const max = Number(params.get('max')) || 0
+  const fav = params.get('fav') === '1'
 
   return (
-    <div className="min-h-screen bg-kurima-black text-foreground pt-24 sm:pt-28 pb-20">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
-
-
-        {/* Toolbar Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 bg-foreground/[0.02] border border-white/5 p-4 rounded-2xl backdrop-blur-md">
-          {/* Search bar */}
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/45" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('shop.searchPlaceholder', 'Search gear, breakers...')}
-              className="w-full pl-10 pr-4 py-2.5 bg-background border border-border/80 rounded-xl text-xs font-semibold text-foreground placeholder-foreground/30 focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all"
+    <div>
+      <FilterGroup title={t('shop.selectManufacturer')}>
+        <div className="max-h-72 space-y-0.5 overflow-y-auto pe-1">
+          <Option active={!brand} onClick={() => set({ brand: null, gamme: null })} label={t('shop.allManufacturers')} />
+          {brands.map((b) => (
+            <Option
+              key={b.id}
+              active={brand.toLowerCase() === b.name.toLowerCase()}
+              onClick={() => set({ brand: b.name, gamme: null })}
+              label={b.name}
+              count={b._count?.products}
             />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-foreground/45 hover:text-foreground cursor-pointer"
+          ))}
+        </div>
+      </FilterGroup>
+
+      {ranges.length > 0 && (
+        <FilterGroup title={t('shop.selectGamme')}>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => set({ gamme: null })}
+              className={cn('h-9 rounded-full px-3.5 text-[0.85rem] ring-hair transition-colors', !gamme ? 'bg-ink-900 text-white' : 'text-ink-900/75 hover:text-ink-900')}
+            >
+              {t('shop.allGammes')}
+            </button>
+            {ranges.map((g) => (
+              <button
+                key={g.id}
+                type="button"
+                onClick={() => set({ gamme: g.name, brand: g.brand?.name || brand || null })}
+                className={cn(
+                  'h-9 rounded-full px-3.5 text-[0.85rem] ring-hair transition-colors',
+                  gamme.toLowerCase() === g.name.toLowerCase() ? 'bg-ink-900 text-white' : 'text-ink-900/75 hover:text-ink-900',
+                )}
               >
-                <X className="w-3.5 h-3.5" />
+                {g.name}
+                {!brand && g.brand?.name ? <span className="opacity-50"> · {g.brand.name}</span> : null}
+              </button>
+            ))}
+          </div>
+        </FilterGroup>
+      )}
+
+      {priceCeil > 0 && (
+        <FilterGroup title={t('shop.maxBudget')}>
+          <div className="flex items-baseline justify-between">
+            <span className="display tabular text-[1.4rem] tracking-[-0.03em] text-ink-900">{max ? formatDA(max) : t('ui.noLimit', 'Sans limite')}</span>
+            {max > 0 && (
+              <button type="button" onClick={() => set({ max: null })} className="eyebrow text-forest">
+                {t('ui.reset', 'Réinitialiser')}
               </button>
             )}
           </div>
-
-          <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-            {/* Sort Toggle */}
-            <div className="flex items-center gap-2 bg-background border border-border rounded-xl px-3 py-2 text-xs font-bold">
-              <ArrowUpDown className="w-3.5 h-3.5 text-foreground/50" />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="bg-transparent text-foreground font-semibold focus:outline-none cursor-pointer"
-              >
-                {sortOptionsList.map(opt => (
-                  <option key={opt.id} value={opt.id} className="bg-kurima-dark text-foreground">
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Mobile Filter Button */}
-            <Button
-              onClick={() => setIsMobileFilterOpen(true)}
-              className="lg:hidden bg-kurima-orange text-black hover:bg-kurima-orange-light px-5 py-3 h-auto rounded-xl flex items-center gap-2 font-black shadow-lg shadow-kurima-orange/20 border-0 transition-all duration-300 hover:scale-105 active:scale-95"
-            >
-              <SlidersHorizontal className="w-4 h-4 text-black font-black" />
-              {t('shop.filters', 'Filters')}
-            </Button>
+          <input
+            type="range"
+            min={0}
+            max={priceCeil}
+            step={Math.max(100, Math.round(priceCeil / 100 / 100) * 100)}
+            value={max || priceCeil}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              set({ max: v >= priceCeil ? null : String(v) })
+            }}
+            aria-label={t('shop.maxBudget')}
+            className="mt-4 w-full accent-[#9af07e]"
+          />
+          <div className="eyebrow mt-2 flex justify-between text-ink-900/62">
+            <span>0 DA</span>
+            <span>{formatDA(priceCeil)}</span>
           </div>
-        </div>
+        </FilterGroup>
+      )}
 
-        {/* Main Grid Layout */}
-        <div className="flex gap-8 items-start">
-          
-          {/* Desktop Filter Sidebar */}
-          <aside className="hidden lg:block w-72 shrink-0 bg-foreground/[0.015] border border-foreground/10 p-6 rounded-3xl sticky top-24">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="font-black text-sm uppercase tracking-wider flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4 text-kurima-orange" />
-                {t('shop.refineSearch', 'Refine Search')}
-              </h3>
-              <button
-                onClick={handleResetFilters}
-                className="text-[10px] font-black text-kurima-orange hover:text-kurima-orange-light uppercase tracking-wider transition-colors cursor-pointer"
-              >
-                {t('shop.clearAll', 'Clear All')}
-              </button>
-            </div>
-
-            {/* Categories Select */}
-            <div className="mb-6">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectCategory', 'Select Category')}</h4>
-              <div className="relative w-full">
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
-                >
-                  {categoriesList.map(cat => (
-                    <option key={cat.id} value={cat.id} className="bg-background text-foreground">
-                      {cat.label}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                  <ChevronDown className="w-4 h-4" />
-                </div>
-              </div>
-            </div>
-
-            <Separator className="bg-foreground/10 my-6" />
-
-            {/* Brands Select */}
-            <div className="mb-6">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectManufacturer', 'Select Manufacturer')}</h4>
-              <div className="relative w-full">
-                <select
-                  value={selectedBrand}
-                  onChange={(e) => setSelectedBrand(e.target.value)}
-                  className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
-                >
-                  {brandsList.map(brand => (
-                    <option key={brand} value={brand} className="bg-background text-foreground">
-                      {brand === 'All Brands' ? t('shop.allManufacturers', 'All Manufacturers') : brand}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                  <ChevronDown className="w-4 h-4" />
-                </div>
-              </div>
-            </div>
-
-            <Separator className="bg-foreground/10 my-6" />
-
-            {/* Gamme Select */}
-            <div className="mb-6">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectGamme', 'Select Range')}</h4>
-              <div className="relative w-full">
-                <select
-                  value={selectedGamme}
-                  onChange={(e) => setSelectedGamme(e.target.value)}
-                  className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
-                >
-                  <option value="All Gammes" className="bg-background text-foreground">
-                    {t('shop.allGammes', 'All Ranges')}
-                  </option>
-                  {gammesList.map(gamme => (
-                    <option key={gamme} value={gamme} className="bg-background text-foreground">
-                      {gamme}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                  <ChevronDown className="w-4 h-4" />
-                </div>
-              </div>
-            </div>
-
-            <Separator className="bg-foreground/10 my-6" />
-
-            {/* Price Range Slider */}
-            <div className="mb-6">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.maxBudget', 'Max Budget')}</h4>
-                <span className="text-xs font-black text-black dark:text-kurima-orange">{maxPrice.toLocaleString()} DA</span>
-              </div>
-              <input
-                type="range"
-                min={5000}
-                max={300000}
-                step={5000}
-                value={maxPrice}
-                onChange={(e) => setMaxPrice(Number(e.target.value))}
-                className="w-full h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer accent-kurima-orange"
-              />
-              <div className="flex justify-between text-[9px] text-foreground/45 mt-1.5 font-bold">
-                <span>5,000 DA</span>
-                <span>300,000 DA</span>
-              </div>
-            </div>
-
-            <Separator className="bg-foreground/10 my-6" />
-
-            {/* Toggle Favorites */}
-            <div className="flex justify-between items-center">
-              <div>
-                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.favoritesOnly', 'Favorites Only')}</h4>
-                <p className="text-[10px] text-foreground/45">{t('shop.favoritesDesc', 'Show only liked products')}</p>
-              </div>
-              <button
-                onClick={() => setOnlyFavorites(!onlyFavorites)}
-                className={`w-10 h-6 rounded-full p-1 transition-all ${
-                  onlyFavorites ? 'bg-kurima-orange' : 'bg-foreground/10'
-                }`}
-              >
-                <div className={`w-4 h-4 rounded-full bg-black transition-all ${
-                  onlyFavorites ? 'translate-x-4' : 'translate-x-0'
-                }`} />
-              </button>
-            </div>
-          </aside>
-
-          {/* Product Grid Area */}
-          <div className="flex-1">
-            <AnimatePresence mode="wait">
-              {loading ? (
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {[...Array(6)].map((_, i) => (
-                    <div key={i} className="animate-pulse bg-foreground/[0.03] border border-border/80 rounded-2xl h-[360px] flex flex-col justify-between p-5">
-                      <div className="h-[180px] bg-foreground/5 rounded-xl mb-4" />
-                      <div className="space-y-3 flex-1 flex flex-col justify-end">
-                        <div className="h-3 bg-foreground/5 rounded w-1/4" />
-                        <div className="h-5 bg-foreground/5 rounded w-3/4" />
-                        <div className="h-3 bg-foreground/5 rounded w-1/2" />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : products.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="text-center py-20 bg-foreground/[0.015] border border-white/5 rounded-3xl p-8"
-                >
-                  <div className="w-16 h-16 mx-auto rounded-2xl bg-white/5 flex items-center justify-center mb-6">
-                    <PackageOpen className="w-8 h-8 text-foreground/35" />
-                  </div>
-                  <h3 className="text-xl font-black mb-2 uppercase">{t('shop.noMatchTitle', 'No Products Match')}</h3>
-                  <p className="text-kurima-muted max-w-sm mx-auto text-sm mb-6">
-                    {t('shop.noMatchText', "We couldn't find any results matching your filter combination. Reset the filters to browse our entire portfolio.")}
-                  </p>
-                  <Button 
-                    onClick={handleResetFilters}
-                    className="bg-kurima-orange hover:bg-kurima-orange-light text-black font-bold rounded-full px-6"
-                  >
-                    {t('shop.resetFilters', 'Reset Filter Parameters')}
-                  </Button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  initial="hidden"
-                  animate="visible"
-                  variants={{
-                    hidden: { opacity: 0 },
-                    visible: {
-                      opacity: 1,
-                      transition: { staggerChildren: 0.05 }
-                    }
-                  }}
-                  className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"
-                >
-                  {products.map((product, i) => (
-                    <ProductCard key={product.id} product={product} index={i} />
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Filter Drawer Overlay */}
-      <AnimatePresence>
-        {isMobileFilterOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.6 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsMobileFilterOpen(false)}
-              className="fixed inset-0 z-[70] bg-black/70 backdrop-blur-sm"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, x: '-50%', y: '-45%' }}
-              animate={{ opacity: 1, scale: 1, x: '-50%', y: '-50%' }}
-              exit={{ opacity: 0, scale: 0.95, x: '-50%', y: '-45%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 260 }}
-              className="fixed top-1/2 left-1/2 z-[80] w-[92%] max-w-sm bg-background border border-foreground/10 shadow-2xl p-6 rounded-3xl overflow-y-auto max-h-[85vh] scrollbar-none"
-            >
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="font-black text-base uppercase tracking-wider flex items-center gap-2">
-                  <SlidersHorizontal className="w-4 h-4 text-kurima-orange" />
-                  {t('shop.filterOptions', 'Filter Options')}
-                </h3>
-                <button
-                  onClick={() => setIsMobileFilterOpen(false)}
-                  className="p-2 text-foreground/70 hover:text-foreground cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Mobile Categories Select */}
-              <div className="mb-6">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectCategory', 'Categories')}</h4>
-                <div className="relative w-full">
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => {
-                      setSelectedCategory(e.target.value)
-                      setIsMobileFilterOpen(false)
-                    }}
-                    className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
-                  >
-                    {categoriesList.map(cat => (
-                      <option key={cat.id} value={cat.id} className="bg-background text-foreground">
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              <Separator className="bg-white/5 my-6" />
-
-              {/* Mobile Brands Select */}
-              <div className="mb-6">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectManufacturer', 'Manufacturers')}</h4>
-                <div className="relative w-full">
-                  <select
-                    value={selectedBrand}
-                    onChange={(e) => {
-                      setSelectedBrand(e.target.value)
-                      setIsMobileFilterOpen(false)
-                    }}
-                    className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
-                  >
-                    {brandsList.map(brand => (
-                      <option key={brand} value={brand} className="bg-background text-foreground">
-                        {brand === 'All Brands' ? t('shop.allManufacturers', 'All Manufacturers') : brand}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              <Separator className="bg-white/5 my-6" />
-
-              {/* Mobile Gammes Select */}
-              <div className="mb-6">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted mb-3">{t('shop.selectGamme', 'Ranges')}</h4>
-                <div className="relative w-full">
-                  <select
-                    value={selectedGamme}
-                    onChange={(e) => {
-                      setSelectedGamme(e.target.value)
-                      setIsMobileFilterOpen(false)
-                    }}
-                    className="w-full appearance-none bg-background/40 hover:bg-background/70 border border-foreground/10 rounded-2xl px-4 py-3.5 pr-10 text-xs font-semibold text-foreground focus:outline-none focus:border-kurima-orange focus:ring-1 focus:ring-kurima-orange/20 transition-all cursor-pointer shadow-md"
-                  >
-                    <option value="All Gammes" className="bg-background text-foreground">
-                      {t('shop.allGammes', 'All Ranges')}
-                    </option>
-                    {gammesList.map(gamme => (
-                      <option key={gamme} value={gamme} className="bg-background text-foreground">
-                        {gamme}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-foreground/45">
-                    <ChevronDown className="w-4 h-4" />
-                  </div>
-                </div>
-              </div>
-
-              <Separator className="bg-white/5 my-6" />
-
-              {/* Mobile Price */}
-              <div className="mb-6">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.maxBudget', 'Max Budget')}</h4>
-                  <span className="text-xs font-black text-black dark:text-kurima-orange">{maxPrice.toLocaleString()} DA</span>
-                </div>
-                <input
-                  type="range"
-                  min={5000}
-                  max={300000}
-                  step={5000}
-                  value={maxPrice}
-                  onChange={(e) => setMaxPrice(Number(e.target.value))}
-                  className="w-full h-1 bg-foreground/10 rounded-lg appearance-none cursor-pointer accent-kurima-orange"
-                />
-              </div>
-
-              <Separator className="bg-foreground/5 my-6" />
-
-              {/* Mobile Favorites */}
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-kurima-muted">{t('shop.favoritesOnly', 'Favorites Only')}</h4>
-                  <p className="text-[10px] text-foreground/45">{t('shop.favoritesDesc', 'Show only liked products')}</p>
-                </div>
-                <button
-                  onClick={() => setOnlyFavorites(!onlyFavorites)}
-                  className={`w-10 h-6 rounded-full p-1 transition-all ${
-                    onlyFavorites ? 'bg-kurima-orange' : 'bg-foreground/10'
-                  }`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-black transition-all ${
-                    onlyFavorites ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-
-              <Button
-                onClick={() => setIsMobileFilterOpen(false)}
-                className="w-full bg-kurima-orange hover:bg-kurima-orange-light text-black font-black py-4 rounded-xl"
-              >
-                {t('shop.applyFilters', 'Apply Active Filters')}
-              </Button>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      <FilterGroup title={t('shop.favoritesOnly')}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={fav}
+          onClick={() => set({ fav: fav ? null : '1' })}
+          className="flex w-full items-center justify-between gap-4 rounded-xl px-3 py-2.5 text-start text-ink-900/80 hover:bg-ink-900/[0.04]"
+        >
+          <span className="flex items-center gap-2.5">
+            <Heart className={cn('size-4', fav ? 'fill-[#ff8a80] text-[#d93025]' : 'text-ink-900/65')} />
+            {t('shop.favoritesDesc')} <span className="eyebrow text-ink-900/62">({favCount})</span>
+          </span>
+          <span className={cn('relative h-6 w-10 shrink-0 rounded-full transition-colors', fav ? 'bg-volt' : 'bg-ink-900/15')}>
+            <span className={cn('absolute top-1 size-4 rounded-full bg-ink-900 transition-[inset-inline-start] duration-300', fav ? 'start-5' : 'start-1')} />
+          </span>
+        </button>
+      </FilterGroup>
     </div>
+  )
+}
+
+export default function ShopPage() {
+  const { t } = useTranslation()
+  const scope = useRef(null)
+  const [params, setParams] = useSearchParams()
+  const { categories, brands, gammes } = useStore()
+  const favorites = useFavorites()
+
+  const category = params.get('category') || ''
+  const brand = params.get('brand') || ''
+  const gamme = params.get('gamme') || ''
+  const search = params.get('search') || ''
+  const sort = params.get('sort') || 'featured'
+  const max = Number(params.get('max')) || 0
+  const fav = params.get('fav') === '1'
+  const promoOnly = params.get('promo') === '1'
+
+  const [query, setQuery] = useState(search)
+  const [products, setProducts] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [visible, setVisible] = useState(PAGE)
+  const [sheet, setSheet] = useState(false)
+
+  useIntro(scope, [category])
+
+  /** Updates some search params (null removes them). */
+  const set = (patch) => {
+    const next = new URLSearchParams(params)
+    Object.entries(patch).forEach(([k, v]) => (v == null || v === '' ? next.delete(k) : next.set(k, v)))
+    setParams(next, { replace: true })
+  }
+
+  // Keep the search box and the URL in sync (debounced)
+  useEffect(() => setQuery(search), [search])
+  useEffect(() => {
+    if (query === search) return
+    const id = setTimeout(() => set({ search: query.trim() || null }), 320)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query])
+
+  // Server-side filters
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    api
+      .getProducts({ category: category || undefined, brand: brand || undefined, gamme: gamme || undefined, search: search || undefined })
+      .then((data) => alive && setProducts(Array.isArray(data) ? data : []))
+      .catch(() => alive && setProducts([]))
+      .finally(() => alive && setLoading(false))
+    setVisible(PAGE)
+    return () => {
+      alive = false
+    }
+  }, [category, brand, gamme, search])
+
+  useEffect(() => {
+    const label = category ? categoryLabel(t, category) : brand || t('nav.shop')
+    setSeo({
+      title: label,
+      description: category
+        ? t('shop.seoCategory', '{{name}} : toutes les références au meilleur prix, livrées dans les 58 wilayas avec paiement à la livraison.', { name: label })
+        : undefined,
+      path: '/shop' + (category ? `?category=${encodeURIComponent(category)}` : ''),
+    })
+  }, [category, brand, t])
+
+  useEffect(() => {
+    if (!sheet) return
+    lockScroll('filters')
+    return () => unlockScroll('filters')
+  }, [sheet])
+
+  // Client-side refinements (price, favourites, sort)
+  const priceCeil = useMemo(() => {
+    const top = Math.max(0, ...(products || []).map((p) => finalPrice(p)))
+    return top > 0 ? Math.ceil(top / 1000) * 1000 : 0
+  }, [products])
+
+  const list = useMemo(() => {
+    let out = [...(products || [])]
+    if (max) out = out.filter((p) => fromPrice(p).price <= max)
+    if (fav) out = out.filter((p) => favorites.includes(Number(p.id)))
+    if (promoOnly) out = out.filter((p) => promoOf(p) > 0 || p.tag === 'SALE')
+    if (SORTS[sort] && sort !== 'featured') out.sort(SORTS[sort])
+    return out
+  }, [products, max, fav, promoOnly, favorites, sort])
+
+  const ranges = useMemo(() => {
+    const cat = categories.find((c) => c.name.toLowerCase() === category.toLowerCase())
+    return gammes.filter((g) => (!cat || g.categoryId === cat.id) && (!brand || g.brand?.name?.toLowerCase() === brand.toLowerCase()))
+  }, [gammes, categories, category, brand])
+
+  const chips = [
+    brand && { key: 'brand', label: brand, clear: { brand: null, gamme: null } },
+    gamme && { key: 'gamme', label: gamme, clear: { gamme: null } },
+    search && { key: 'search', label: `« ${search} »`, clear: { search: null } },
+    max && { key: 'max', label: `≤ ${formatDA(max)}`, clear: { max: null } },
+    fav && { key: 'fav', label: t('shop.favoritesOnly'), clear: { fav: null } },
+    promoOnly && { key: 'promo', label: t('home.tabPromo', 'Promotions'), clear: { promo: null } },
+  ].filter(Boolean)
+
+  const resetAll = () => setParams(new URLSearchParams(category ? { category } : {}), { replace: true })
+  const title = category ? categoryLabel(t, category) : promoOnly ? t('home.tabPromo', 'Promotions') : fav ? t('shop.favoritesOnly') : brand || t('ui.catalogue', 'Le catalogue')
+  const totalAll = categories.reduce((n, c) => n + (c._count?.products || 0), 0)
+  const filterProps = { params, set, brands, ranges, priceCeil, favCount: favorites.length }
+
+  return (
+    <Page deps={[products]}>
+      <main id="main" ref={scope} className="relative pt-6 pb-24 md:pt-9">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-[34rem] overflow-hidden">
+          <div className="grid-lines-dark absolute inset-0 [mask-image:radial-gradient(ellipse_70%_70%_at_30%_0%,#000_10%,transparent_70%)]" />
+          <div className="absolute -top-40 left-[20%] h-[30rem] w-[50rem] bg-[radial-gradient(closest-side,rgba(154,240,126,0.09),transparent)]" />
+        </div>
+
+        <div className="container-x relative">
+          {/* Header */}
+          <div className="grid gap-6 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-8">
+              <p data-intro className="mb-4 flex items-center gap-2 text-[0.85rem] text-ink-900/65">
+                <Link to="/" className="hover:text-ink-900">
+                  {t('nav.home')}
+                </Link>
+                <span>/</span>
+                <Link to="/shop" className="hover:text-ink-900">
+                  {t('nav.shop')}
+                </Link>
+                {category && (
+                  <>
+                    <span>/</span>
+                    <span className="text-ink-900/85">{title}</span>
+                  </>
+                )}
+              </p>
+              <h1 key={title} className="text-[clamp(2rem,4vw,3.4rem)] leading-[1] font-semibold tracking-[-0.045em]">
+                <SplitWords text={title} />
+              </h1>
+            </div>
+            <p data-intro className="text-[0.98rem] text-ink-900/60 lg:col-span-4 lg:text-end">
+              {t('shop.lead', 'Filtrez par marque, gamme ou budget : chaque référence est livrée dans les 58 wilayas, payée à la livraison.')}
+            </p>
+          </div>
+
+          {/* Category pills */}
+          <nav data-intro aria-label={t('nav.categories')} className="-mx-[clamp(1rem,3.4vw,3rem)] mt-7 overflow-x-auto px-[clamp(1rem,3.4vw,3rem)] no-scrollbar">
+            <ul className="flex w-max gap-2">
+              <li>
+                <Link
+                  to="/shop"
+                  className={cn('flex h-11 items-center gap-2 rounded-full px-5 text-[0.93rem] ring-hair transition-colors', !category ? 'bg-volt text-ink-900' : 'bg-ink-900/[0.04] text-ink-900/75 hover:text-ink-900')}
+                >
+                  {t('shop.allCategories')}
+                  <span className={cn('eyebrow', !category ? 'text-ink-900/60' : 'text-ink-900/62')}>{formatNumber(totalAll)}</span>
+                </Link>
+              </li>
+              {categories.map((c) => {
+                const active = c.name.toLowerCase() === category.toLowerCase()
+                return (
+                  <li key={c.id}>
+                    <Link
+                      to={`/shop?category=${encodeURIComponent(c.name)}`}
+                      className={cn('flex h-11 items-center gap-2 rounded-full px-5 text-[0.93rem] ring-hair transition-colors', active ? 'bg-volt text-ink-900' : 'bg-ink-900/[0.04] text-ink-900/75 hover:text-ink-900')}
+                    >
+                      {categoryLabel(t, c.name)}
+                      <span className={cn('eyebrow', active ? 'text-ink-900/60' : 'text-ink-900/62')}>{formatNumber(c._count?.products ?? 0)}</span>
+                    </Link>
+                  </li>
+                )
+              })}
+            </ul>
+          </nav>
+
+          <div className="mt-8 grid gap-8 lg:grid-cols-[16rem_1fr]">
+            {/* Desktop filters */}
+            <aside aria-label={t('shop.refineSearch')} className="hidden lg:block">
+              <div className="sticky top-32">
+                <div className="mb-6 flex items-center justify-between">
+                  <p className="flex items-center gap-2 text-ink-900">
+                    <SlidersHorizontal className="size-4 text-forest" /> {t('shop.refineSearch')}
+                  </p>
+                  {chips.length > 0 && (
+                    <button type="button" onClick={resetAll} className="eyebrow text-forest">
+                      {t('shop.clearAll')}
+                    </button>
+                  )}
+                </div>
+                <Filters {...filterProps} />
+              </div>
+            </aside>
+
+            <div className="min-w-0">
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center gap-2.5">
+                <label className="relative min-w-[14rem] flex-1">
+                  <span className="sr-only">{t('shop.searchPlaceholder')}</span>
+                  <Search className="pointer-events-none absolute top-1/2 size-4 -translate-y-1/2 text-ink-900/65 ltr:left-4 rtl:right-4" />
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={t('shop.searchPlaceholder')}
+                    className="field rounded-full ltr:pl-11 rtl:pr-11"
+                  />
+                </label>
+                <label className="relative">
+                  <span className="sr-only">{t('ui.sortBy', 'Trier par')}</span>
+                  <select value={sort} onChange={(e) => set({ sort: e.target.value === 'featured' ? null : e.target.value })} className="field w-auto rounded-full pe-9">
+                    <option value="featured">{t('shop.sortFeatured')}</option>
+                    <option value="price-asc">{t('shop.sortPriceAsc')}</option>
+                    <option value="price-desc">{t('shop.sortPriceDesc')}</option>
+                    <option value="rating">{t('shop.sortRating')}</option>
+                    <option value="name">{t('ui.sortName', 'Nom (A → Z)')}</option>
+                  </select>
+                </label>
+                <Btn variant="ghost" size="md" className="h-12 lg:hidden" onClick={() => setSheet(true)} icon={<SlidersHorizontal className="size-4" />}>
+                  {t('shop.filters')} {chips.length ? `(${chips.length})` : ''}
+                </Btn>
+              </div>
+
+              <div className="mt-5 flex min-h-9 flex-wrap items-center gap-2">
+                <p className="eyebrow me-2 text-ink-900/65" aria-live="polite">
+                  {loading ? t('ui.loading', 'Chargement…') : t('ui.resultCount', '{{count}} produits', { count: list.length })}
+                </p>
+                {chips.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => set(c.clear)}
+                    className="flex h-8 items-center gap-1.5 rounded-full bg-ink-900/[0.06] ps-3 pe-2 text-[0.82rem] text-ink-900/85 ring-hair hover:bg-ink-900/[0.1]"
+                  >
+                    {c.label} <X className="size-3.5 text-ink-900/60" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Grid */}
+              {loading && !products ? (
+                <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4 xl:grid-cols-4">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <ProductCardSkeleton key={i} />
+                  ))}
+                </div>
+              ) : list.length === 0 ? (
+                <div className="mt-6 flex flex-col items-center rounded-[1.5rem] bg-ink-900/[0.03] px-6 py-20 text-center ring-hair">
+                  <span className="flex size-16 items-center justify-center rounded-full bg-ink-900/[0.05]">
+                    <PackageOpen className="size-7 text-ink-900/65" />
+                  </span>
+                  <p className="display mt-6 text-[1.8rem] tracking-[-0.03em] text-ink-900">{t('shop.noMatchTitle')}</p>
+                  <p className="mt-2 max-w-md text-ink-900/60">{t('shop.noMatchText')}</p>
+                  <Btn variant="volt" chip className="mt-8" onClick={() => setParams(new URLSearchParams(), { replace: true })}>
+                    {t('shop.resetFilters')}
+                  </Btn>
+                </div>
+              ) : (
+                <>
+                  <div className={cn('mt-6 grid grid-cols-2 gap-3 transition-opacity duration-300 md:grid-cols-3 md:gap-4 xl:grid-cols-4', loading && 'opacity-50')}>
+                    {list.slice(0, visible).map((p, i) => (
+                      <ProductCard key={p.id} product={p} priority={i < 4} />
+                    ))}
+                  </div>
+                  {list.length > visible && (
+                    <div className="mt-14 flex flex-col items-center gap-3">
+                      <p className="eyebrow text-ink-900/65">
+                        {t('ui.shownOf', '{{shown}} sur {{total}}', { shown: Math.min(visible, list.length), total: list.length })}
+                      </p>
+                      <Btn variant="ghost" size="lg" chip onClick={() => setVisible((v) => v + PAGE)}>
+                        {t('ui.loadMore', 'Afficher plus')}
+                      </Btn>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile filter sheet */}
+        <div className={cn('fixed inset-0 z-[130] lg:hidden', sheet ? 'visible' : 'invisible delay-500')} aria-hidden={!sheet}>
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden="true"
+            onClick={() => setSheet(false)}
+            className={cn('absolute inset-0 bg-ink-900/40 backdrop-blur-sm transition-opacity duration-500', sheet ? 'opacity-100' : 'opacity-0')}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={t('shop.filterOptions')}
+           
+            className={cn(
+              'absolute inset-x-0 bottom-0 max-h-[88svh] overflow-y-auto rounded-t-[1.75rem] bg-white px-5 pt-3 pb-6 ring-hair transition-transform duration-700 ease-[var(--ease-osmo)]',
+              sheet ? 'translate-y-0' : 'translate-y-full',
+            )}
+          >
+            <span className="mx-auto mb-4 block h-1 w-10 rounded-full bg-ink-900/20" />
+            <div className="mb-6 flex items-center justify-between">
+              <p className="display text-[1.6rem] tracking-[-0.03em] text-ink-900">{t('shop.filterOptions')}</p>
+              <button type="button" onClick={() => setSheet(false)} className="flex size-10 items-center justify-center rounded-full bg-ink-900/[0.06]" aria-label={t('ui.close', 'Fermer')}>
+                <X className="size-4" />
+              </button>
+            </div>
+            <Filters {...filterProps} />
+            <div className="sticky bottom-0 mt-6 grid grid-cols-2 gap-2 bg-white pt-3">
+              <Btn variant="ghost" onClick={resetAll}>
+                {t('shop.clearAll')}
+              </Btn>
+              <Btn variant="volt" onClick={() => setSheet(false)}>
+                {t('ui.showResults', 'Voir {{count}} produits', { count: list.length })}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      </main>
+    </Page>
   )
 }
